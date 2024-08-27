@@ -1,7 +1,7 @@
 const mongoose = require("mongoose");
 
-const HelperSchema = new mongoose.Schema({
-    Helper_id: String,
+const staffSchema = new mongoose.Schema({
+    staff_id: String,
     fullName: String, 
     password: String,
     birthDate: Date,
@@ -41,6 +41,6 @@ const HelperSchema = new mongoose.Schema({
     timestamps: true
 });
 
-const Helper = mongoose.model("Helper", HelperSchema, "Helpers");
+const staff = mongoose.model("Staff", staffSchema, "staffs");
 
-module.exports = Helper;
+module.exports = staff;
