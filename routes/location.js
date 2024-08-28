@@ -1,5 +1,5 @@
 const router = require('express').Router()
 const {locationController} =require('../controller/locationController')
-router.get('/',locationController.get)
+router.get('/',locationController.getLocation)
 
 module.exports =router;
