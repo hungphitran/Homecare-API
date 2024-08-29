@@ -1,8 +1,8 @@
-const Helper= require('../model/helper')
+const Helper= require('../model/helper.model')
 
 const helperController={
     get : async (req,res,next)=>{
-        await Helper.find({deleted:false})
+        await Helper.find()
         .then(data=> {
             res.status(200).json(data)
         })

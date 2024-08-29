@@ -1,43 +1,32 @@
 const mongoose = require("mongoose");
 
 const helperSchema = new mongoose.Schema({
-    helper_id: String,
-    fullName: String,
+    helper_id : String,
+    fullName : String,
     startDate: {
         type: Date,
         default: Date.now()
     },
-    birthDate: Date,
-    phone: String,
-    birthPlace: String,
-    address: String,
-    workingArea: {
+    birthDate : Date,
+    phone : String,
+    birthPlace : String,
+    address : String,
+    workingArea : {
         province: String,
-        districts: [
-            {
-                district: String
-            }
-        ]
-    },
-    jobs: [
-        {
-            jobName: String
-        }
-    ],
+        districts: []
+    },  
+    jobDetail: String,
+    jobs: [],
     yearOfExperience: Number,
     experienceDescription: String,
-    avatar: String,
-    healthCertificates: [
-        {
-            healthCertificate: String
-        }
-    ],
+    avatar : String,
+    healthCertificates : [],
     salary_id: String,
     gender: String,
-    nationality: String,
+    nationality : String,
     educationLevel: String,
-    height: Number,
-    weight: Number,
+    height :Number,
+    weight : Number,
     deleted: {
         type: Boolean,
         default: false
