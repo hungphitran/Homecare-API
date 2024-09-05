@@ -1,8 +1,8 @@
-const Helper= require('../model/helper.model')
+const Staff= require('../model/staff.model')
 
-const helperController={
+const staffController={
     getAll : async (req,res,next)=>{
-        await Helper.find()
+        await Staff.find()
         .then(data=> {
             res.status(200).json(data)
         })
@@ -19,4 +19,4 @@ const helperController={
     }
 }
 
-module.exports={helperController};
+module.exports={staffController};
