@@ -1,6 +1,5 @@
 const router = require('express').Router()
 const {helperController} =require('../controller/helperController')
-router.get('/:slug',helperController.getWithFilter)
-router.get('/',helperController.getAll)
+router.get('/',helperController.get)
 
 module.exports =router;
