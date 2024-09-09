@@ -2,15 +2,13 @@ const mongoose = require("mongoose");
 
 const customerSchema = new mongoose.Schema({
 	phone : String,
-    email: String,
 	name: String,
-    address:[
+    email: String,
+    password: String,
+    addresses:[
         {
             detailedAddress: String,
         }
-    ],
-    requests:[
-        {requestId:String}
     ],
     updatedBy: [
         {
