@@ -1,7 +1,10 @@
 const mongoose = require("mongoose");
 
 const requestSchema = new mongoose.Schema({
-    orderDate: Date,
+    orderDate: {
+        type:Date,
+        default:Date.now()
+    },
     startDate: Date,
     endDate: Date,
     startTime: Date,
