@@ -22,7 +22,10 @@ const requestSchema = new mongoose.Schema({
     requestType: String,
     service_id: String,
     negotiationCosts: String,
-    status: String,
+    status:{
+        type:String,
+        default:"notDone"
+    },
     location: {
         province: String,
         district: String
