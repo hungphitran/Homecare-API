@@ -8,7 +8,7 @@ const serviceController={
         })
         .catch((err)=>{console.error(err)})
     },
-    getOneByTitle:async (req,res,next)=>{
+    getOneById:async (req,res,next)=>{
         await  Service.findOne({title:req.params.title})
         .then(data=> {
             res.status(200).json(data)
