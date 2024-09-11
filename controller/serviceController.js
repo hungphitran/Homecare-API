@@ -9,7 +9,7 @@ const serviceController={
         .catch((err)=>{console.error(err)})
     },
     getOneById:async (req,res,next)=>{
-        await  Service.findOne({title:req.params.title})
+        await  Service.findOne({_id:req.params.id})
         .then(data=> {
             res.status(200).json(data)
         })
