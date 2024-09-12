@@ -3,5 +3,5 @@ const router = require('express').Router()
 
 
 router.post('/',customerController.create)
-router.get('/',customerController.get)
+router.get('/:id',customerController.get)
 module.exports = router;
