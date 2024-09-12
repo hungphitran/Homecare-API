@@ -5,6 +5,10 @@ const customerSchema = new mongoose.Schema({
 	name: String,
     email: String,
     password: String,
+    point: {
+        type:Number,
+        default:0
+    },
     addresses:[
         {
             detailedAddress: String,
