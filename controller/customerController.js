@@ -1,8 +1,8 @@
 const Customer = require('../model/customer.model')
 
 const customerController ={
-    getOne: async (req,res,next)=>{
-        Customer.findOne({_id:req.params.id})
+    getOne: async(req,res,next)=>{
+        Customer.findOne({phone:req.params.phone})
         .then(data=>res.status(200).json(data))
         .catch(err=>res.status(500).json(err))
     },
