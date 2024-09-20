@@ -1,12 +1,9 @@
 const mongoose = require("mongoose");
-
 const requestSchema = new mongoose.Schema({
     orderDate: {
-        type:Date,
-        default:Date.now()
+        type: Date,
+        default: Date.now()
     },
-    startDate: Date,
-    endDate: Date,
     startTime: Date,
     endTime: Date,
     staff_id: String,
@@ -16,18 +13,21 @@ const requestSchema = new mongoose.Schema({
         loseThings: Boolean,
         breakThings: Boolean
     },
+    customer_id: String,
     customerInfo: {
         fullName: String,
         phone: String,
         address: String
     },
-    customer_id:String,
     requestType: String,
     service_id: String,
-    negotiationCosts: String,
-    status:{
-        type:String,
-        default:"notDone"
+    negotiationCosts: {
+        type: Number,
+        default: 0
+    }, // Giá thỏa thuận
+    status: {
+        type: String,
+        default: "notDone"
     },
     location: {
         province: String,
