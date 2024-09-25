@@ -1,29 +1,25 @@
 const mongoose = require("mongoose");
 
-const customerSchema = new mongoose.Schema({
-	phone : String,
-	name: String,
+const CustomerSchema = new mongoose.Schema({
+    fullName: String,
+    phone: String,
     email: String,
     password: String,
     point: {
-        type:Number,
-        default:0
+        type: Number,
+        default: 0
     },
-    addresses:[
+    addresses: [
         {
-            detailedAddress: String,
-        }
-    ],
-    updatedBy: [
-        {
-            account_id: String,
-            updatedAt: Date
+            province: String,
+            district: String,
+            detailAddress: String
         }
     ]
 }, {
     timestamps: true
 });
 
-const customer = mongoose.model("customer", customerSchema, "customers");
+const Customer = mongoose.model("Customer", CustomerSchema, "customers");
 
-module.exports = customer;
+module.exports = Customer;
