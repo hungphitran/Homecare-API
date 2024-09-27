@@ -3,9 +3,7 @@ const mongoose = require("mongoose");
 const serviceSchema = new mongoose.Schema({
     title: String,
     basicPrice: Number,
-    extraFee: String,
-    overTimePrice_Helper: Number,
-    overTimePrice_Customer: Number,
+    factor: Number, // Hệ số
     description: String,
     status: String,
     deleted: {

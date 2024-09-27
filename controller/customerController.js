@@ -16,6 +16,12 @@ const customerController ={
         .then(data=>res.status(200).json(data))
         .catch(err=>res.status(500).json(err))
     },
+    update: async(req,res,next)=>{
+        console.log(req.body)
+        Customer.updateOne({'_id':req.body._id})
+        .then(data=>res.status(200).json(data))
+        .catch(err=>res.status(500).json(err))
+    }
 }
 
 module.exports=customerController;

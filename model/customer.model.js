@@ -5,10 +5,13 @@ const CustomerSchema = new mongoose.Schema({
     phone: String,
     email: String,
     password: String,
-    point: {
-        type: Number,
-        default: 0
-    },
+    signedUp: Boolean, 
+    points: [
+        {
+            point: Number,
+            updateDate: Date
+        }
+    ],
     addresses: [
         {
             province: String,
