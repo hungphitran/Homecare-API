@@ -3,8 +3,8 @@ const Location= require('../model/location.model')
 const locationController={
     getLocation : async (req,res,next)=>{
         await Location.find()
-        .then(data=> {
-            res.status(200).json(data)
+        .then(()=> {
+            res.status(200).json("success")
         })
         .catch((err)=>{console.error(err)})
     }

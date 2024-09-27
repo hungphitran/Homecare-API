@@ -3,23 +3,23 @@ const Customer = require('../model/customer.model')
 const customerController ={
     getOne: async(req,res,next)=>{
         Customer.findOne({phone:req.params.phone})
-        .then(data=>res.status(200).json(data))
+        .then(()=>res.status(200).json("success"))
         .catch(err=>res.status(500).json(err))
     },
     create: async(req,res,next)=>{
         Customer.create(req.body)
-        .then(data=>res.status(200).end())
+        .then(()=>res.status(200).json("success"))
         .catch(err=>res.status(500).json(err))
     },
     getAll: async (req,res,next)=>{
         Customer.find({})
-        .then(data=>res.status(200).json(data))
+        .then(()=>res.status(200).json("success"))
         .catch(err=>res.status(500).json(err))
     },
     update: async(req,res,next)=>{
         console.log(req.body)
         Customer.updateOne({'_id':req.body._id})
-        .then(data=>res.status(200).json(data))
+        .then(()=>res.status(200).json("success"))
         .catch(err=>res.status(500).json(err))
     }
 }
