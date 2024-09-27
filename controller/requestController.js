@@ -10,7 +10,7 @@ const requestController ={
     },
     get: async (req,res,next)=>{
         await Request.find()
-        .then(()=>res.status(200).json("success"))
+        .then((data)=>res.status(200).json(data))
         .catch((err)=> res.status(500).json(err))
     }
 }
