@@ -28,17 +28,18 @@ const sendSMS = function(phones,otp) {
 
     const req = https.request(options, function(res) {
         res.setEncoding('utf8');
-        const body = '';
+        let body = '';
         res.on('data', function(d) {
             body += d;
         });
         res.on('end', function() {
-            const json = JSON.parse(body);
+            let json = JSON.parse(body);
+            console.log(body)
             if (json.status == 'success') {
-                return 1;
+                return true;
             }
             else {
-                return null;
+                return false;
             }
         });
     });
@@ -80,7 +81,7 @@ const messageController={
             console.log('send sms success')
         }
         else{
-            console.log('error in sending')
+            console.log('error in sending',tmp)
         }
         await Message.create({
             phone: req.body.phone,

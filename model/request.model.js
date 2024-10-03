@@ -4,10 +4,18 @@ const requestSchema = new mongoose.Schema({
         type: Date,
         default: Date.now()
     },
-    startTime: Date,
-    endTime: Date,
+    schedule:{
+        startTime: Date,
+        endTime: Date,
+        dates:[
+            {   
+                date: Date,
+                helper_id:String
+            }
+        ]
+    },
+    
     staff_id: String,
-    helper_id: String,
     comment: {
         review: String,
         loseThings: Boolean,
