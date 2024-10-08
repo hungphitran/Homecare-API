@@ -1,7 +1,7 @@
 const mongoose = require("mongoose");
 
 const blogSchema = new mongoose.Schema({
-    date:Date,
+    date:String,
     title:String,
     description:String,
     url:String,
