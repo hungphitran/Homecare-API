@@ -16,9 +16,8 @@ const customerController ={
         .then((data)=>res.status(200).json(data))
         .catch(err=>res.status(500).json(err))
     },
-    update: async(req,res,next)=>{
-        console.log(req.body)
-        Customer.findByIdAndUpdate({"_id":req.body._id},req.body)
+    update: async(req,res,next)=>{        
+        Customer.findOneAndUpdate({"phone":req.params.phone},req.body)
         .then(()=>res.status(200).json("success"))
         .catch(err=>res.status(500).json(err))
     }
