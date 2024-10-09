@@ -1,38 +1,36 @@
 const mongoose = require("mongoose");
+
 const requestSchema = new mongoose.Schema({
     orderDate: {
         type: Date,
         default: Date.now()
     },
-    schedule:{
-        startTime: Date,
-        endTime: Date,
-        dates:[
-            {   
-                date: Date,
-                helper_id:String
-            }
-        ]
-    },
-    
-    staff_id: String,
+    scheduleIds: [
+        {
+            schedule_id: String
+        }
+    ],
+    startTime: Date,
+    endTime: Date,
     comment: {
         review: String,
         loseThings: Boolean,
         breakThings: Boolean
     },
-    customer_id: String,
     customerInfo: {
         fullName: String,
         phone: String,
-        address: String
+        address: String,
+        usedPoint: Number
     },
     requestType: String,
-    service_id: String,
-    negotiationCosts: {
-        type: Number,
-        default: 0
-    }, // Giá thỏa thuận
+    service: {
+        title: String, // Tên dịch vụ
+        coefficient: Number, // Hệ số dịch vụ,
+        cost: Number // Số tiền phải trả cho dịch vụ đó trên 1 giờ
+    },
+    totalCost: Number,
+    profit: Number,
     status: {
         type: String,
         default: "notDone"
