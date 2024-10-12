@@ -6,6 +6,7 @@ const blogSchema = new mongoose.Schema({
     description:String,
     url:String,
     img:String,
+    content:String,
     deleted:{
         type:Boolean,
         default:false

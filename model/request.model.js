@@ -5,11 +5,10 @@ const requestSchema = new mongoose.Schema({
         type: Date,
         default: Date.now()
     },
-    scheduleIds: [
-        {
-            schedule_id: String
-        }
-    ],
+    scheduleIds: {
+        type: Array,
+        default: []
+    },
     startTime: Date,
     endTime: Date,
     comment: {
