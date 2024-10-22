@@ -7,6 +7,7 @@ const serviceRouter = require('./service')
 const requestRouter = require('./request')
 const customerRouter = require('./customer');
 const messageRouter= require('./message')
+const requestDetailRouter =require('./requestDetail')
 
 router.use('/blog',blogRouter)
 router.use('/message',messageRouter)
@@ -15,6 +16,7 @@ router.use('/request', requestRouter);
 router.use('/service', serviceRouter);
 router.use('/location', locationRouter);
 router.use('/helper', helperRouter)
+router.use('/requestDetail',requestDetailRouter)
 
 
 module.exports = router;

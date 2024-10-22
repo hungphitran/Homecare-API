@@ -11,11 +11,6 @@ const requestSchema = new mongoose.Schema({
     },
     startTime: Date,
     endTime: Date,
-    comment: {
-        review: String,
-        loseThings: Boolean,
-        breakThings: Boolean
-    },
     customerInfo: {
         fullName: String,
         phone: String,
@@ -25,7 +20,8 @@ const requestSchema = new mongoose.Schema({
     requestType: String,
     service: {
         title: String, // Tên dịch vụ
-        coefficient: Number, // Hệ số dịch vụ,
+        coefficient_service: Number,
+        coefficient_other:Number, // Hệ số dịch vụ,
         cost: Number // Số tiền phải trả cho dịch vụ đó trên 1 giờ
     },
     totalCost: Number,

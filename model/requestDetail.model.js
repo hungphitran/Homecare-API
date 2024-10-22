@@ -4,7 +4,7 @@ const requestDetailSchema = new mongoose.Schema({
     workingDate: Date,
     helper_id: String,
     status: String, // notDone - processing - done
-    helper_cost: String
+    helper_cost: Number
 }, {
     timestamps: true
 });
