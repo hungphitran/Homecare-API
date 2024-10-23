@@ -1,24 +1,38 @@
 const mongoose = require("mongoose");
 
-const blogSchema = new mongoose.Schema({
-    date:String,
-    title:String,
-    description:String,
-    url:String,
-    img:String,
-    tag:String,
-    content:String,
-    deleted:{
-        type:Boolean,
-        default:false
+const BlogSchema = new mongoose.Schema({
+    title: String,
+    description: String,
+    url: String,
+    img: String,
+    content: String,
+    author: String,
+    date: {
+        type: Date,
+        default: Date.now()
     },
-    createdAt: { type: Date, default: Date.now }
+    deleted: {
+        type: Boolean,
+        default: false
+    },
+    createdBy: {
+        account_id: String,
+        createdAt: {
+            type: Date,
+            default: Date.now
+        }
+    },
+    updatedBy: [
+        {
+            account_id: String,
+            updatedAt: Date
+        }
+    ],
+    deletedAt: Date
 }, {
     timestamps: true
 });
 
-
-
-const Blog = mongoose.model("blog", blogSchema, "blogs");
+const Blog = mongoose.model("Blog", BlogSchema, "blogs");
 
 module.exports = Blog;
