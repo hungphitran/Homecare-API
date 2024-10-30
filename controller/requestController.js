@@ -1,9 +1,33 @@
 const Request = require('../model/request.model')
+const RequestDetail= require('../model/requestDetail.model')
 
 const requestController ={
     //POST a new request
     create: async (req,res,next)=>{
         req.body.customerInfo = JSON.parse(req.body.customerInfo);
+        req.body.orderDate =new Date(req.body.orderDate)
+        let dates =(req.body.startDate).split(',')
+        let scheduleIds= []
+        for(let workingDate of dates){
+            let reqDetail= new RequestDetail({
+                startTime:req.body.startTime,
+                endTime :req.body.endTime,
+                workingDate: new Date(workingDate),
+                helper_id:req.body.helperId,
+                status:"Chưa tiến hành"
+            })
+            await RequestDetail.create(reqDetail)
+
+            scheduleIds.push(reqDetail._id)
+        }
+        req.body.scheduleIds=scheduleIds
+        let option={
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(req.body)
+        }
         await Request.create(req.body)
         .then(()=>res.status(200).json("success"))
         .catch((err)=> res.status(500).json(err))
