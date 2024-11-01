@@ -14,13 +14,16 @@ const requestController ={
                 endTime :req.body.endTime,
                 workingDate: new Date(workingDate),
                 helper_id:req.body.helperId,
+                helper_cost: Number.parseInt(req.body.totalCost)/(dates.length) ,
                 status:"Chưa tiến hành"
             })
-            await RequestDetail.create(reqDetail)
+            await reqDetail.save()
+            .catch(err=>res.status(500).send(err))
 
             scheduleIds.push(reqDetail._id)
         }
         req.body.scheduleIds=scheduleIds
+
         let option={
             method: 'POST',
             headers: {
