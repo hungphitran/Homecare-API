@@ -1,10 +1,12 @@
 const Request = require('../model/request.model')
 const RequestDetail= require('../model/requestDetail.model')
+const {ObjectId} = require('mongoose').Types
 
 const requestController ={
     //POST a new request
     create: async (req,res,next)=>{
-        req.body.customerInfo = JSON.parse(req.body.customerInfo);
+            req.body._id = new ObjectId()
+        req.body.customerInfo = req.body.customerInfo;
         req.body.orderDate =new Date(req.body.orderDate)
         let dates =(req.body.startDate).split(',')
         let scheduleIds= []
