@@ -2,10 +2,10 @@ const mongoose = require("mongoose");
 
 const requestDetailSchema = new mongoose.Schema({
     workingDate: Date,
-    startTime: String, // Giờ bắt đầu làm việc
-    endTime: String, // Giờ kết thúc làm việc
+    startTime: Date, // Giờ bắt đầu làm việc
+    endTime: Date, // Giờ kết thúc làm việc
     helper_id: String,
-    status: String, // notDone - processing - done
+    status: String, // notDone - assigned - processing - done - cancelled
     helper_cost: Number
 }, {
     timestamps: true
