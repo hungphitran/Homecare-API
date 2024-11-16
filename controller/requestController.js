@@ -5,6 +5,7 @@ const requestController ={
     //POST a new request
     create: async (req,res,next)=>{
         req.body.customerInfo = JSON.parse(req.body.customerInfo);
+        req.body.customerInfo.usedpoint=0;
         req.body.orderDate =new Date(req.body.orderDate)
         let dates =(req.body.startDate).split(',')
         dates=dates.filter((value,index)=>{
@@ -27,14 +28,15 @@ const requestController ={
             scheduleIds.push(reqDetail._id)
         }
 
-        req.body.scheduleIds=scheduleIds
+        
+
         let newOrder= new Request({
             orderDate:req.body.orderDate,
             requestType:req.body.requestType,
             scheduleIds:scheduleIds,
             startTime: req.body.startTime,
             endTime: req.body.endTime,
-            customerInfo:req.customerInfo,
+            customerInfo:req.body.customerInfo,
             requestType:req.body.requestType,
             service:req.body.service,
             totalCost:req.body.totalCost,
