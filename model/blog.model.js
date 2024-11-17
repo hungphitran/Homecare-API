@@ -7,10 +7,12 @@ const BlogSchema = new mongoose.Schema({
     img: String,
     content: String,
     author: String,
+    type: String, // Quảng cáo, Thông báo chính sách,...
     date: {
         type: Date,
-        default: Date.now()
+        default: Date.now
     },
+    status: String,
     deleted: {
         type: Boolean,
         default: false
