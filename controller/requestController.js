@@ -4,15 +4,16 @@ const RequestDetail= require('../model/requestDetail.model')
 const requestController ={
     //POST a new request
     create: async (req,res,next)=>{
-
-        req.body.customerInfo = req.body.customerInfo;
+        console.log(typeof req.body.customerInfo)
+        if( typeof req.body.customerInfo == "string"){
+            req.body.customerInfo = JSON.parse(req.body.customerInfo);
+        }
         req.body.customerInfo.usedpoint=0;
         req.body.orderDate =new Date(req.body.orderDate)
         let dates =(req.body.startDate).split(',')
         dates=dates.filter((value,index)=>{
             return value;
         })
-
         let scheduleIds= []
         for(let workingDate of dates){
             let reqDetail= new RequestDetail({
