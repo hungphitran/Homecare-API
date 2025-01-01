@@ -1,8 +1,7 @@
-const { get } = require("mongoose");
 const generalSettingModel = require("../model/generalSetting.model");
 
 const generalSettingController = {
-    get: async (req, res) => {
+    getAll: async (req, res) => {
         await generalSettingModel.findOne()
             .then((data) => {
                 res.status(200).json(data);
