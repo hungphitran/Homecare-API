@@ -4,7 +4,7 @@ const RequestDetail= require('../model/requestDetail.model')
 const requestController ={
     //POST a new request
     create: async (req,res,next)=>{
-        console.log(typeof req.body.customerInfo)
+        console.log(req.body)
         if( typeof req.body.customerInfo == "string"){
             req.body.customerInfo = JSON.parse(req.body.customerInfo);
         }
@@ -26,6 +26,7 @@ const requestController ={
             })
 
             await reqDetail.save()
+            .then(()=>console.log("success"))
             .catch(err=>res.status(500).send(err))
             scheduleIds.push(reqDetail._id)
         }

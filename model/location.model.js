@@ -1,15 +1,18 @@
 const mongoose = require('mongoose');
 
 const locationSchema = new mongoose.Schema({
-    province: String, 
-    districts: {
-        type: Array,
-        default: []
-    },
-    deleted: {
-        type: Boolean,
-        default: false
-    }
+    Name: String,
+    status: String,
+    Districts: [
+        {
+            Name: String,
+            Wards: [
+                {
+                    Name: String
+                }
+            ]
+        }
+    ]
 }, {
     timestamps: true
 });
