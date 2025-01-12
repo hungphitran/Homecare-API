@@ -1,6 +1,6 @@
-// const generalSettingController = require("../controller/generalSettingController");
-// const router = require('express').Router();
+const router = require('express').Router()
+const generalSettingController = require('../controller/generalSettingController')
 
-// router.get('/', generalSettingController.getAll);
+router.get('/', generalSettingController.getAll);
 
-// module.exports = router;
+module.exports = router;

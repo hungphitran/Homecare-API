@@ -6,10 +6,16 @@ const GeneralSettingSchema = new mongoose.Schema({
         default: "generalSetting"
     }, // Có tác dụng làm tham chiếu khi truy xuất, ngoài ra không còn tác dụng khác
     baseSalary: Number,
-    openHour: Number, // Thời gian mở cửa, lưu đơn vị phút
-    closeHour: Number, //Thời gian đóng cửa, lưu đơn vị phút
-    officeStartTime: Number, // Giờ bắt đầu hành chính, lưu đơn vị phút
-    officeEndTime: Number // Giờ kết thúc hành chính, lưu đơn vị phút
+    openHour: String, // Thời gian mở cửa
+    closeHour: String, //Thời gian đóng cửa
+    officeStartTime: String, // Giờ bắt đầu hành chính
+    officeEndTime: String, // Giờ kết thúc hành chính
+    companyName: String,
+    companyEmail: String,
+    companyAddress: String,
+    companyPhone: String,
+    holidayStartDate: Date,
+    holidayEndDate: Date
 }, {
     timestamps: true
 });

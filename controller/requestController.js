@@ -26,9 +26,8 @@ const requestController ={
             })
 
             await reqDetail.save()
-            .then(()=>console.log("success"))
+            .then(()=>scheduleIds.push(reqDetail._id))
             .catch(err=>res.status(500).send(err))
-            scheduleIds.push(reqDetail._id)
         }
 
         

@@ -10,7 +10,7 @@ const messageRouter= require('./message')
 const requestDetailRouter =require('./requestDetail')
 const timeOffRouter = require('./timeOff')
 const costFactorRouter = require('./costFactor')
-// const generalSettingRouter = require('./generalSetting')
+const generalRouter = require('./generalSetting')
 
 router.use('/blog',blogRouter)
 router.use('/message',messageRouter)
@@ -22,7 +22,6 @@ router.use('/helper', helperRouter)
 router.use('/requestDetail',requestDetailRouter)
 router.use('/timeOff',timeOffRouter)
 router.use('/costFactor', costFactorRouter)
-// router.use('/generalSetting', generalSettingRouter)
-
+router.use('/generalSetting', generalRouter)
 
 module.exports = router;

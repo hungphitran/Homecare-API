@@ -15,4 +15,4 @@ const helperController={
     },
 }
 
-module.exports={helperController};
+module.exports=helperController;

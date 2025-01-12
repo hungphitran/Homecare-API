@@ -10,4 +10,4 @@ const locationController={
     
 }
 
-module.exports={locationController};
+module.exports=locationController;

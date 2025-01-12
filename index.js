@@ -10,8 +10,8 @@ server.use(cors());
 server.use(bodyParser.urlencoded({ extended: true }));
 server.use(bodyParser.json());
 db.connect();
-server.use('/api', router);
+server.use('/', router);
 
 server.listen(process.env.PORT||80,()=>{
-  console.log('API-server is running on http://localhost/api')
+  console.log('API-server is running on http://localhost')
 })
