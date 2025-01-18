@@ -8,6 +8,9 @@ const requestRouter = require('./request')
 const customerRouter = require('./customer');
 const messageRouter= require('./message')
 const requestDetailRouter =require('./requestDetail')
+const timeOffRouter = require('./timeOff')
+const costFactorRouter = require('./costFactor')
+const generalRouter = require('./generalSetting')
 
 router.use('/blog',blogRouter)
 router.use('/message',messageRouter)
@@ -17,6 +20,8 @@ router.use('/service', serviceRouter);
 router.use('/location', locationRouter);
 router.use('/helper', helperRouter)
 router.use('/requestDetail',requestDetailRouter)
-
+router.use('/timeOff',timeOffRouter)
+router.use('/costFactor', costFactorRouter)
+router.use('/generalSetting', generalRouter)
 
 module.exports = router;

@@ -12,5 +12,4 @@ const serviceController={
         .catch((err)=>{console.error(err)})
     }
 }
-
-module.exports={serviceController};
+module.exports=serviceController;

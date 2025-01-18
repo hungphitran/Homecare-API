@@ -12,7 +12,7 @@ const helperController={
         await Helper.findOne({_id:req.params.id})
             .then((data)=>res.status(200).json(data))
             .catch((err)=>{console.error(err)})
-    }
+    },
 }
 
-module.exports={helperController};
+module.exports=helperController;
