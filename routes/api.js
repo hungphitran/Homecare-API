@@ -21,6 +21,5 @@ router.use('/helper', helperRouter)
 router.use('/requestDetail',requestDetailRouter)
 router.use('/timeOff',timeOffRouter)
 router.use('/costFactor', costFactorRouter)
-router.use('/generalSetting', generalRouter)
 
 module.exports = router;
