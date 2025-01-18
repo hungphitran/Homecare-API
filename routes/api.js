@@ -10,7 +10,6 @@ const messageRouter= require('./message')
 const requestDetailRouter =require('./requestDetail')
 const timeOffRouter = require('./timeOff')
 const costFactorRouter = require('./costFactor')
-const generalRouter = require('./generalSetting')
 
 router.use('/blog',blogRouter)
 router.use('/message',messageRouter)
