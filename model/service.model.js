@@ -3,7 +3,7 @@ const mongoose = require("mongoose");
 const serviceSchema = new mongoose.Schema({
     title: String,
     basicPrice: Number,
-    factor: Number, // Hệ số
+    coefficient_id: String, // Id của hệ số
     description: String,
     status: String,
     deleted: {
