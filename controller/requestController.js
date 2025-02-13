@@ -4,12 +4,15 @@ const RequestDetail= require('../model/requestDetail.model')
 const requestController ={
     //POST a new request
     create: async (req,res,next)=>{
-        console.log(req.body)
         if( typeof req.body.customerInfo == "string"){
             req.body.customerInfo = JSON.parse(req.body.customerInfo);
         }
         req.body.customerInfo.usedpoint=0;
+
         req.body.orderDate =new Date(req.body.orderDate)
+        req.body.startTime = new Date(req.body.startTime+"Z")
+        req.body.endTime = new Date(req.body.endTime+"Z")
+
         let dates =(req.body.startDate).split(',')
         dates=dates.filter((value,index)=>{
             return value;
@@ -44,8 +47,11 @@ const requestController ={
             totalCost:req.body.totalCost,
             status:"Chưa tiến hành"
         })
+        console.log(req.body)
+        res.send(newOrder)
+
         await newOrder.save()
-        .then(()=>res.status(200).json("success"))
+        //.then(()=>res.status(200).json("success"))
         .catch((err)=> res.status(500).json(err))
     },
     // GET all request in database
