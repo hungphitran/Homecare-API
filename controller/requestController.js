@@ -47,8 +47,6 @@ const requestController ={
             totalCost:req.body.totalCost,
             status:"Chưa tiến hành"
         })
-        console.log(req.body)
-        res.send(newOrder)
 
         await newOrder.save()
         //.then(()=>res.status(200).json("success"))
