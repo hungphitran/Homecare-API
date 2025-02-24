@@ -57,6 +57,11 @@ const requestController ={
             customerInfo:req.body.customerInfo,
             requestType:req.body.requestType,
             service:req.body.service,
+            location:{
+                province:req.body.province,
+                district:req.body.district,
+                ward:req.body.ward,
+            },
             totalCost:req.body.totalCost,
             status:"Chưa tiến hành"
         })
