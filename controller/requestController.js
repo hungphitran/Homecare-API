@@ -38,7 +38,7 @@ const requestController ={
                 workingDate: new Date(workingDate),
                 helper_id:req.body.helperId,
                 helper_cost: Number.parseInt(req.body.totalCost)/(dates.length) ,
-                status:"Chưa tiến hành"
+                status:"notDone"
             })
 
             await reqDetail.save()
@@ -63,7 +63,7 @@ const requestController ={
                 ward:req.body.ward,
             },
             totalCost:req.body.totalCost,
-            status:"Chưa tiến hành"
+            status:"notDone"
         })
         await newOrder.save()
         .then(()=>res.status(200).json("success"))

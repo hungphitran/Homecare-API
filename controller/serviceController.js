@@ -2,7 +2,7 @@ const Service= require('../model/service.model')
 
 const serviceController={
     getAll : async (req,res,next)=>{
-        await Service.find()
+        await Service.find({status:"active"})
         .then((data)=> res.status(200).json(data))
         .catch((err)=>{console.error(err)})
     },
