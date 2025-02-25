@@ -30,7 +30,10 @@ const requestSchema = new mongoose.Schema({
         cost: Number // Số tiền phải trả cho dịch vụ đó trên 1 giờ
     },
     totalCost: Number,
-    profit: Number,
+    profit: {
+        type: Number,
+        default: 0
+    },
     status: {
         type: String,
         default: "notDone"

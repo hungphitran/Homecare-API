@@ -5,6 +5,11 @@ const requestDetailSchema = new mongoose.Schema({
     startTime: Date, // Giờ bắt đầu làm việc
     endTime: Date, // Giờ kết thúc làm việc
     helper_id: String,
+    comment: {
+        review: { type: String, default: '' },
+        loseThings: { type: Boolean, default: false },
+        breakThings: { type: Boolean, default: false }
+    },
     status: String, // notDone - assigned - processing - done - cancelled
     helper_cost: Number
 }, {

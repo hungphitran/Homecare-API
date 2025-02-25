@@ -19,7 +19,6 @@ const helperSchema = new mongoose.Schema({
             default: []
         }
     },  
-    jobDetail: String,
     jobs: {
         type: Array,
         default: []
@@ -31,7 +30,6 @@ const helperSchema = new mongoose.Schema({
         type: Array,
         default: []
     },
-    salary_id: String, // Sau này sẽ chỉ lưu id của model Helper Salary tại đây
     gender: String,
     nationality: String,
     educationLevel: String,

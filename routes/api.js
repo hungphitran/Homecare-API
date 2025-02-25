@@ -14,6 +14,7 @@ const costFactorRouter = require('./costFactor')
 const generalRouter = require('./general')
 const policyRouter = require('./policy')
 const questionRouter = require('./question')
+const discountRouter = require('./discount');
 
 router.use('/blog',blogRouter)
 router.use('/message',messageRouter)
@@ -28,4 +29,5 @@ router.use('/costFactor', costFactorRouter)
 router.use('/general', generalRouter);
 router.use('/policy', policyRouter);
 router.use('/question', questionRouter);
+router.use('/discount', discountRouter);
 module.exports = router;
