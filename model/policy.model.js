@@ -1,13 +1,8 @@
 const mongoose = require("mongoose");
 
-const BlogSchema = new mongoose.Schema({
+const PolicySchema = new mongoose.Schema({
     title: String,
-    description: String,
-    img: String,
-    desc_img: String,
     content: String,
-    author: String,
-    type: String, // Quảng cáo, Thông báo chính sách,...
     date: {
         type: Date,
         default: Date.now
@@ -35,6 +30,6 @@ const BlogSchema = new mongoose.Schema({
     timestamps: true
 });
 
-const Blog = mongoose.model("Blog", BlogSchema, "blogs");
+const Policy = mongoose.model("Policy", PolicySchema, "policies");
 
-module.exports = Blog;
+module.exports = Policy;

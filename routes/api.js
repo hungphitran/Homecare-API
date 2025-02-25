@@ -12,6 +12,8 @@ const timeOffRouter = require('./timeOff')
 const costFactorRouter = require('./costFactor')
 
 const generalRouter = require('./general')
+const policyRouter = require('./policy')
+const questionRouter = require('./question')
 
 router.use('/blog',blogRouter)
 router.use('/message',messageRouter)
@@ -24,5 +26,6 @@ router.use('/requestDetail',requestDetailRouter)
 router.use('/timeOff',timeOffRouter)
 router.use('/costFactor', costFactorRouter)
 router.use('/general', generalRouter);
-
+router.use('/policy', policyRouter);
+router.use('/question', questionRouter);
 module.exports = router;
