@@ -36,8 +36,8 @@ const requestController ={
                 startTime:req.body.startTime,
                 endTime :req.body.endTime,
                 workingDate: new Date(workingDate),
-                helper_id:req.body.helperId,
-                helper_cost: Number.parseInt(req.body.totalCost)/(dates.length) ,
+                helper_id:req.body.helperId || "notAvailable",
+                helper_cost: 0 ,
                 status:"notDone"
             })
 
