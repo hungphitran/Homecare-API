@@ -36,8 +36,8 @@ const requestController ={
                 startTime:req.body.startTime,
                 endTime :req.body.endTime,
                 workingDate: new Date(workingDate),
-                helper_id:req.body.helperId || "notAvailable",
-                helper_cost: 0 ,
+                helper_id:req.body.helperId || req.body.helper_id || "notAvailable",
+                helper_cost: 0,
                 status:"notDone"
             })
 
@@ -74,7 +74,12 @@ const requestController ={
         await Request.find()
         .then((data)=>res.status(200).json(data))
         .catch((err)=> res.status(500).json(err))
-    }
+    },
+    getByPhone: async (req,res,next)=>{
+        await Request.find({"customerInfo.phone":req.params.phone})
+        .then((data)=>res.status(200).json(data))
+        .catch((err)=> res.status(500).json(err))
+    },
 }
 
 module.exports = requestController;
