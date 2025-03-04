@@ -46,7 +46,11 @@ const requestController ={
             .catch(err=>res.status(500).send(err))
         }
 
-        
+        let location = req.body.location ||{  //handle location
+            province:req.body.province,
+            district:req.body.district,
+            ward:req.body.ward,
+        }
 
         let newOrder= new Request({
             orderDate:req.body.orderDate,
@@ -57,11 +61,7 @@ const requestController ={
             customerInfo:req.body.customerInfo,
             requestType:req.body.requestType,
             service:req.body.service,
-            location:{
-                province:req.body.province,
-                district:req.body.district,
-                ward:req.body.ward,
-            },
+            location:location,
             totalCost:req.body.totalCost,
             status:"notDone"
         })
