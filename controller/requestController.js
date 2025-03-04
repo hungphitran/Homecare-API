@@ -80,6 +80,22 @@ const requestController ={
         .then((data)=>res.status(200).json(data))
         .catch((err)=> res.status(500).json(err))
     },
+
+    cancelRequest: async (req,res,next)=>{
+        await Request.findById(req.body.id)
+        .then(async (data)=>{
+            if(data.status=="notDone"){
+                data.status="cancelled"
+                await data.save()
+                .then(()=>res.status(200).json("success"))
+                .catch((err)=> res.status(500).json(err))
+            }
+            else{
+                res.status(500).json("cannot cancel this request")
+            }
+        })
+        .catch((err)=> res.status(500).json(err))
+    }
 }
 
 module.exports = requestController;
