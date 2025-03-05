@@ -164,6 +164,7 @@ const requestController ={
     },
 
     calculateCost: async (req,res,next)=>{
+        console.log(req.body)
         const {servicePrice, startTime, endTime,workDate,officeStartTime,officeEndTime,coefficient_other,serviceFactor} = req.body;
 
         let cost = calculateTotalCost(servicePrice, startTime, endTime,workDate,officeStartTime,officeEndTime,coefficient_other,serviceFactor)
