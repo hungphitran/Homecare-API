@@ -5,9 +5,9 @@ const generalController = {
     getAll: async (req, res) => {
         try {
             const generalSettings = await generalModel.find();
-            res.json(generalSettings);
+            res.status(200).json(generalSettings[0]);
         } catch (error) {
-            res.json({ message: error });
+            res.status(500).json(error);
         }
     },
 }

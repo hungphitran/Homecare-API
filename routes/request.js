@@ -1,6 +1,7 @@
 const requestController = require('../controller/requestController')
 const router= require('express').Router()
 
+router.post('/calculateCost',requestController.calculateCost);
 router.post('/cancel',requestController.cancelRequest)
 router.get('/:phone',requestController.getByPhone);
 router.get('/',requestController.getAll);
