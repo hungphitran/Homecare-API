@@ -64,6 +64,11 @@ const calculateTotalCost = (servicePrice, startTime, endTime,workDate,officeStar
             HSovertime: HSovertime,
             HScuoituan: HScuoituan,
             isWeekend: isWeekend,
+            totalOvertimeHours: T1,
+            totalNormalHours: T2,
+            applicableWeekendCoefficient: applicableWeekendCoefficient,
+            overtimeCost: overtimeCost,
+            normalCost: normalCost
         }
   };
 
