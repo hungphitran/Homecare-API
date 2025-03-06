@@ -162,6 +162,25 @@ const requestController ={
         })
         .catch((err)=> res.status(500).json(err))
     },
+    finishRequest: async (req,res,next)=>{
+        await
+        Request.findById(req
+            .body.id)
+        .then(async (data)=>{
+            if(data.status=="processing"){
+                data.status="done"
+                await data.save()
+                .then(()=>res.status(200).json("success"))
+                .catch((err)=> res.status(500).json(err))
+            }
+            else{
+                res.status(500).json("cannot finish this request")
+            }
+        }
+        )
+        .catch((err)=> res.status(500).json(err))
+    }
+    ,
 
     calculateCost: async (req,res,next)=>{
         console.log(req.body)
