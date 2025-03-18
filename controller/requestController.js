@@ -189,36 +189,30 @@ const requestController ={
         .then((data)=>data)
         .catch((err)=> res.status(500).json(err))
 
-        // let scheduleIds = request.scheduleIds
-        // for(let scheduleId of scheduleIds){
-        //     await
-        //     RequestDetail.findById(scheduleId)
-        //     .then(
-        //         async (schedule)=>{
-        //         if(schedule.status=="processing"){
-        //             schedule.status="done"
-        //         }
-        //         else{
-        //             res.status(500).json("cannot finish this request")
-        //         }
+        let scheduleIds = request.scheduleIds
+        for(let scheduleId of scheduleIds){
+            await
+            RequestDetail.findById(scheduleId)
+            .then(
+                async (schedule)=>{
+                if(schedule.status=="processing"){
+                    schedule.status="done"
+                }
+                else{
+                    res.status(500).json("cannot finish this request")
+                }
 
-        //         await schedule.save()
-        //         .then(()=>console.log("success"))
-        //         .catch((err)=> res.status(500).json(err))
-        //     })
-        //     .catch((err)=> res.status(500).json(err))
-
-        // }
-        
-        if(request.status=="processing"){
-            request.status="done"
-            await request.save()
-            .then(()=>res.status(200).json("success"))
+                await schedule.save()
+                .then(()=>console.log("success"))
+                .catch((err)=> res.status(500).json(err))
+            })
             .catch((err)=> res.status(500).json(err))
+
         }
-        else{
-            res.status(500).json("cannot finish this request")
-        }
+        request.status="done"
+        await request.save()
+        .then(()=>res.status(200).json("success"))
+        .catch((err)=> res.status(500).json(err))
     },
 
     calculateCost: async (req,res,next)=>{
