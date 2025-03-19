@@ -184,35 +184,25 @@ const requestController ={
         }
     },
     finishRequest: async (req,res,next)=>{
-        
-        let request =await Request.findById(req.body.id)
-        .then((data)=>data)
-        .catch((err)=> res.status(500).json(err))
-
-        let scheduleIds = request.scheduleIds
-        for(let scheduleId of scheduleIds){
-            await
-            RequestDetail.findById(scheduleId)
-            .then(
-                async (schedule)=>{
-                if(schedule.status=="processing"){
-                    schedule.status="done"
-                }
-                else{
-                    res.status(500).json("cannot finish this request")
-                }
-
-                await schedule.save()
-                .then(()=>console.log("success"))
-                .catch((err)=> res.status(500).json(err))
-            })
-            .catch((err)=> res.status(500).json(err))
-
+        let detailId = req.body.detailId;
+        let detail = await RequestDetail.findOne({_id:detailId}) 
+        .then(data=>data)
+        .catch(err=>res.status(500).send(err))
+        console.log(detail)
+        if(detail){
+            if(detail.status=="processing"){
+                detail.status ="done";
+                await detail.save()
+                .then(data=>res.status(200) .send("success"))
+                .catch(err => res.status(500).send(err) )
+            }
+            else{
+                res.status(500).send("can not change status of detail") 
+            }
         }
-        request.status="done"
-        await request.save()
-        .then(()=>res.status(200).json("success"))
-        .catch((err)=> res.status(500).json(err))
+        else{
+            res.status(500).send("can not find detail")        
+        }
     },
 
     calculateCost: async (req,res,next)=>{
