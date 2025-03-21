@@ -191,6 +191,27 @@ const requestController ={
         console.log(detail)
         if(detail){
             if(detail.status=="processing"){
+                detail.status ="waitPay";
+                await detail.save()
+                .then(data=>res.status(200) .send("success"))
+                .catch(err => res.status(500).send(err) )
+            }
+            else{
+                res.status(500).send("can not change status of detail") 
+            }
+        }
+        else{
+            res.status(500).send("can not find detail")        
+        }
+    },
+    finishPayment: async (req,res,next)=>{
+        let detailId = req.body.detailId;
+        let detail = await RequestDetail.findOne({_id:detailId}) 
+        .then(data=>data)
+        .catch(err=>res.status(500).send(err))
+        console.log(detail)
+        if(detail){
+            if(detail.status=="waitPay"){
                 detail.status ="done";
                 await detail.save()
                 .then(data=>res.status(200) .send("success"))
