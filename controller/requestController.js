@@ -27,18 +27,18 @@ const calculateTotalCost = (servicePrice, startTime, endTime,workDate,officeStar
 
       const dayOfWeek = dayjs(workDate).day();
 
-      const dailyHours = Math.floor(end.diff(start, "hour"));
+      const dailyHours = (end.diff(start, "hour",true));
 
       
       let T1 = 0; 
       let T2 = 0; 
       
       if (start.isBefore(officeStartTime)) {
-        T1 += Math.floor(officeStartTime.diff(start, "hour"));
+        T1 += (officeStartTime.diff(start, "hour",true));
       }
       
       if (end.isAfter(officeEndTime)) {
-        T1 += Math.floor(end.diff(officeEndTime, "hour"));
+        T1 += (end.diff(officeEndTime, "hour",true));
       }
       
       T2 = Math.max(0, dailyHours - T1);
@@ -54,11 +54,11 @@ const calculateTotalCost = (servicePrice, startTime, endTime,workDate,officeStar
       const normalCost = applicableWeekendCoefficient * T2;
         console.log("normal",normalCost);
       console.log("basic and hsdv",basicCost,HSDV);
-      totalCost = Math.floor(basicCost * HSDV * (overtimeCost + normalCost));
+      totalCost = (basicCost * HSDV * (overtimeCost + normalCost));
       console.log("total",totalCost);
     
         return {
-            totalCost: Math.floor(totalCost/1000) * 1000,
+            totalCost: totalCost,
             servicePrice: basicCost,
             HSDV: HSDV,
             HSovertime: HSovertime,
