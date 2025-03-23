@@ -191,7 +191,7 @@ const requestController ={
         console.log(detail)
         if(detail){
             if(detail.status=="processing"){
-                detail.status ="waitPay";
+                detail.status ="waitPayment";
                 await detail.save()
                 .then(data=>res.status(200) .send("success"))
                 .catch(err => res.status(500).send(err) )
@@ -211,7 +211,7 @@ const requestController ={
         .catch(err=>res.status(500).send(err))
         console.log(detail)
         if(detail){
-            if(detail.status=="waitPay"){
+            if(detail.status=="waitPayment"){
                 detail.status ="done";
                 await detail.save()
                 .then(data=>res.status(200) .send("success"))
