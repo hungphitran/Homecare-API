@@ -12,7 +12,6 @@ const requestDetailController ={
     getByHelperId: async (req,res,next)=>{
         await RequestDetail.find({helper_id:req.params.id})
         .sort({ workingDate: -1 })
-        .limit(10)
         .then(data=>res.status(200).json(data))
         .catch((err)=> res.status(500).json(err))
     }
