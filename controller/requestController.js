@@ -183,6 +183,48 @@ const requestController ={
             res.status(500).json("cannot cancel this request")
         }
     },
+    assign: async (req,res,next)=>{
+        let detailId = req.body.detailId;
+        let detail = await RequestDetail.findOne({_id:detailId}) 
+        .then(data=>data)
+        .catch(err=>res.status(500).send(err))
+        console.log(detail)
+        if(detail){
+            if(detail.status=="notDone"){
+                detail.status ="assigned";
+                await detail.save()
+                .then(data=>res.status(200) .send("success"))
+                .catch(err => res.status(500).send(err) )
+            }
+            else{
+                res.status(500).send("can not change status of detail") 
+            }
+        }
+        else{
+            res.status(500).send("can not find detail")        
+        }
+    },
+    startWork:  async (req,res,next)=>{
+        let detailId = req.body.detailId;
+        let detail = await RequestDetail.findOne({_id:detailId}) 
+        .then(data=>data)
+        .catch(err=>res.status(500).send(err))
+        console.log(detail)
+        if(detail){
+            if(detail.status=="assigned"){
+                detail.status ="processing";
+                await detail.save()
+                .then(data=>res.status(200) .send("success"))
+                .catch(err => res.status(500).send(err) )
+            }
+            else{
+                res.status(500).send("can not change status of detail") 
+            }
+        }
+        else{
+            res.status(500).send("can not find detail")        
+        }
+    },
     finishRequest: async (req,res,next)=>{
         let detailId = req.body.detailId;
         let detail = await RequestDetail.findOne({_id:detailId}) 
