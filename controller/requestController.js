@@ -226,6 +226,7 @@ const requestController ={
         }
     },
     finishRequest: async (req,res,next)=>{
+        
         let detailId = req.body.detailId;
         let detail = await RequestDetail.findOne({_id:detailId}) 
         .then(data=>data)
@@ -247,25 +248,34 @@ const requestController ={
         }
     },
     finishPayment: async (req,res,next)=>{
-        let detailId = req.body.detailId;
-        let detail = await RequestDetail.findOne({_id:detailId}) 
+        let id = req.body.id;
+        let order = await Request.findOne({_id:id}) 
         .then(data=>data)
         .catch(err=>res.status(500).send(err))
-        console.log(detail)
-        if(detail){
-            if(detail.status=="waitPayment"){
-                detail.status ="done";
-                await detail.save()
-                .then(data=>res.status(200) .send("success"))
+        if(!order){
+            res.status(500).send("can not find order")        
+        }
+
+        let scheduleIds = order.scheduleIds;
+        for(let scheduleId of scheduleIds){
+            let schedule = await RequestDetail.findOne({_id:scheduleId}) 
+            .then(data=>data)
+            .catch(err=>res.status(500).send(err))
+            if(schedule.status=="waitPayment"){
+                schedule.status ="done";
+                await schedule.save()
+                .then(data=>console.log("success"))
                 .catch(err => res.status(500).send(err) )
             }
             else{
                 res.status(500).send("can not change status of detail") 
             }
         }
-        else{
-            res.status(500).send("can not find detail")        
-        }
+        order.status="done";
+        await order.save()
+        .then(data=>res.status(200) .send("success"))
+        .catch(err=>res.status(500).send(err) 
+    )
     },
 
     calculateCost: async (req,res,next)=>{
