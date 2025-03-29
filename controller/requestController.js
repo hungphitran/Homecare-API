@@ -1,6 +1,8 @@
 const Request = require('../model/request.model')
 const RequestDetail= require('../model/requestDetail.model')
 const generalController = require('./generalController')
+const mongoose = require('mongoose');
+const { ObjectId } = mongoose.Types;
 const dayjs = require('dayjs');
 const moment = require('moment');
 
@@ -239,8 +241,17 @@ const requestController ={
         let detail = await RequestDetail.findOne({_id:detailId}) 
         .then(data=>data)
         .catch(err=>res.status(500).send(err))
-        console.log(detail)
+
+        let request  = await Request.findOne({scheduleIds : new mongoose.Types.ObjectId(detailId)}).populate("scheduleIds")
+        .then(data=>data)
+        .catch(err=>res.status(500).send(err))
+
         if(detail){
+            request.status = "processing";
+            await request.save()
+            .then(()=>console.log("success"))
+            .catch(err => res.status(500).send(err))
+
             if(detail.status=="assigned"){
                 detail.status ="processing";
                 await detail.save()
@@ -250,24 +261,43 @@ const requestController ={
             else{
                 res.status(500).send("can not change status of detail") 
             }
+
         }
         else{
             res.status(500).send("can not find detail")        
         }
     },
     finishRequest: async (req,res,next)=>{
-        
         let detailId = req.body.detailId;
         let detail = await RequestDetail.findOne({_id:detailId}) 
         .then(data=>data)
         .catch(err=>res.status(500).send(err))
-        console.log(detail)
+
+        let request  = await Request.findOne({scheduleIds : new mongoose.Types.ObjectId(detailId)}).populate("scheduleIds")
+        .then(data=>data)
+        .catch(err=>res.status(500).send(err))
+
         if(detail){
             if(detail.status=="processing"){
                 detail.status ="done";
+
+                for(let scheduleId of request.scheduleIds){
+                    let schedule = await RequestDetail.findOne({_id:scheduleId})
+                    .then(data=>data)
+                    .catch(err=>res.status(500).send(err))
+                    if(schedule.status!="done"){
+                        await detail.save()
+                        .then(data=>res.status(200) .send("success"))
+                        .catch(err => res.status(500).send(err) )
+                    }
+                }
+                request.status = "waitPayment";
+                await request.save()
+                .catch(err => res.status(500).send(err))
+
                 await detail.save()
                 .then(data=>res.status(200) .send("success"))
-                .catch(err => res.status(500).send(err) )
+                .catch(err => res.status(500).send(err))
             }
             else{
                 res.status(500).send("can not change status of detail") 
@@ -312,21 +342,21 @@ const requestController ={
             return res.status(500).send(err.message || "An error occurred");
         }
     },
-    confirmFinish:  async (req,res,next)=>{
-        try {
-            let id = req.body.id;
-            let order = await Request.findOne({ _id: id }).then(data => data)
-            if (!order) {
-                return res.status(500).send("Cannot find order");
-            }
-            order.status = "waitPayment";
-            await order.save();
-            return res.status(200).send("Success");
-        } catch (err) {
-            console.error(err);
-            return res.status(500).send(err.message || "An error occurred");
-        }
-    },
+    // confirmFinish:  async (req,res,next)=>{
+    //     try {
+    //         let id = req.body.id;
+    //         let order = await Request.findOne({ _id: id }).then(data => data)
+    //         if (!order) {
+    //             return res.status(500).send("Cannot find order");
+    //         }
+    //         order.status = "waitPayment";
+    //         await order.save();
+    //         return res.status(200).send("Success");
+    //     } catch (err) {
+    //         console.error(err);
+    //         return res.status(500).send(err.message || "An error occurred");
+    //     }
+    // },
 
     calculateCost: async (req,res,next)=>{
         console.log(req.body)
