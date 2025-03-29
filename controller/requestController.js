@@ -109,7 +109,7 @@ const requestController ={
                 workingDate: new Date(workingDate),
                 helper_id:req.body.helperId || req.body.helper_id || "notAvailable",
                 helper_cost: 0,
-                status:  (req.body.helperId || req.body.helper_id) ? "assigned" : "notDone"
+                status: "notDone"
             })
 
             await reqDetail.save()
@@ -134,12 +134,38 @@ const requestController ={
             service:req.body.service,
             location:location,
             totalCost:req.body.totalCost,
-            status:"notDone"
+            status:  "notDone"
         })
         await newOrder.save()
         .then(()=>res.status(200).json("success"))
         .catch((err)=> res.status(500).json(err))
     },
+    confirm: async (req,res,next)=>{
+        let id = req.body.id;
+        let request = await Request.findOne({ _id: id })
+        .then(data=>data)
+        .catch(err=>res.status(500).send(err))
+
+        if(!request){
+            return res.status(500).send("Cannot find request");
+        }
+        let scheduleIds = request.scheduleIds;
+        console.log(scheduleIds)
+        for(let scheduleId of scheduleIds){
+            let schedule = await RequestDetail.findOne({_id:scheduleId})
+            .then(data=>data)
+            .catch(err=>res.status(500).send(err))
+
+            schedule.status = "assigned";
+            await schedule.save()
+            .then(data=>console.log("Schedule updated successfully"))
+        }
+        request.status = "assigned";
+        await request.save()
+        .then(()=>res.status(200).json("success"))
+        .catch((err)=> res.status(500).json(err))
+    }
+    ,
     // GET all request in database
     getAll: async (req,res,next)=>{
         await Request.find()
@@ -233,7 +259,7 @@ const requestController ={
         console.log(detail)
         if(detail){
             if(detail.status=="processing"){
-                detail.status ="waitPayment";
+                detail.status ="done";
                 await detail.save()
                 .then(data=>res.status(200) .send("success"))
                 .catch(err => res.status(500).send(err) )
@@ -274,6 +300,21 @@ const requestController ={
             }
     
             order.status = "done";
+            await order.save();
+            return res.status(200).send("Success");
+        } catch (err) {
+            console.error(err);
+            return res.status(500).send(err.message || "An error occurred");
+        }
+    },
+    confirmFinish:  async (req,res,next)=>{
+        try {
+            let id = req.body.id;
+            let order = await Request.findOne({ _id: id }).then(data => data)
+            if (!order) {
+                return res.status(500).send("Cannot find order");
+            }
+            order.status = "waitPayment";
             await order.save();
             return res.status(200).send("Success");
         } catch (err) {
