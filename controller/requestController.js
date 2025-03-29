@@ -325,11 +325,7 @@ const requestController ={
                     return res.status(500).send(`Cannot find schedule with ID`);
                 }
     
-                if (schedule.status === "waitPayment") {
-                    schedule.status = "done";
-                     await schedule.save();
-                     console.log("Schedule updated successfully");
-                } else {
+                if (schedule.status != "done"){
                     return res.status(500).send("Cannot change status of detail");
                 }
             }
