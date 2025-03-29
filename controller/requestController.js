@@ -248,34 +248,39 @@ const requestController ={
         }
     },
     finishPayment: async (req,res,next)=>{
-        let id = req.body.id;
-        let order = await Request.findOne({_id:id}) 
-        .then(data=>data)
-        .catch(err=>res.status(500).send(err))
-        if(!order){
-            res.status(500).send("can not find order")        
-        }
+        try {
+            let id = req.body.id;
+            let order = await Request.findOne({ _id: id }).then(data => data)
+            if (!order) {
+                return res.status(500).send("Cannot find order");
+            }
+    
+            let scheduleIds = order.scheduleIds;
+            console.log(scheduleIds)
+            for (let scheduleId of scheduleIds) {
+                let schedule = await RequestDetail.findOne({ _id: scheduleId });
+                console.log(schedule)
 
-        let scheduleIds = order.scheduleIds;
-        for(let scheduleId of scheduleIds){
-            let schedule = await RequestDetail.findOne({_id:scheduleId}) 
-            .then(data=>data)
-            .catch(err=>res.status(500).send(err))
-            if(schedule.status=="waitPayment"){
-                schedule.status ="done";
-                await schedule.save()
-                .then(data=>console.log("success"))
-                .catch(err => res.status(500).send(err) )
+                if (!schedule) {
+                    return res.status(500).send(`Cannot find schedule with ID`);
+                }
+    
+                if (schedule.status === "waitPayment") {
+                    schedule.status = "done";
+                     await schedule.save();
+                     console.log("Schedule updated successfully");
+                } else {
+                    return res.status(500).send("Cannot change status of detail");
+                }
             }
-            else{
-                res.status(500).send("can not change status of detail") 
-            }
+    
+            order.status = "done";
+            await order.save();
+            return res.status(200).send("Success");
+        } catch (err) {
+            console.error(err);
+            return res.status(500).send(err.message || "An error occurred");
         }
-        order.status="done";
-        await order.save()
-        .then(data=>res.status(200) .send("success"))
-        .catch(err=>res.status(500).send(err) 
-    )
     },
 
     calculateCost: async (req,res,next)=>{
