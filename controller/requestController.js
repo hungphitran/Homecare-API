@@ -109,7 +109,7 @@ const requestController ={
                 workingDate: new Date(workingDate),
                 helper_id:req.body.helperId || req.body.helper_id || "notAvailable",
                 helper_cost: 0,
-                status:"notDone"
+                status:  (req.body.helperId || req.body.helper_id) ? "assigned" : "notDone"
             })
 
             await reqDetail.save()
