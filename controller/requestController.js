@@ -160,28 +160,27 @@ const requestController ={
                 await RequestDetail.findById(scheduleId)
                 .then(
                     async (schedule)=>{
-                    if(schedule.status=="notDone"){
-                        schedule.status="cancelled"
-                    }
-                    else{
+                    if(schedule.status!="notDone"){
                         res.status(500).json("cannot cancel this request")
                     }
-
+                })
+                .catch((err)=> res.status(500).json(err))
+            }
+            for(let scheduleId of request.scheduleIds){
+                await RequestDetail.findOne(scheduleId)
+                .then(async (schedule)=>{
+                    schedule.status="cancelled"
                     await schedule.save()
                     .then(()=>console.log("success"))
                     .catch((err)=> res.status(500).json(err))
                 })
                 .catch((err)=> res.status(500).json(err))
             }
-        if(request.status=="notDone"){
             request.status="cancelled"
             await request.save()
             .then(()=>res.status(200).json("success"))
             .catch((err)=> res.status(500).json(err))
-        }
-        else{
-            res.status(500).json("cannot cancel this request")
-        }
+
     },
     assign: async (req,res,next)=>{
         let detailId = req.body.detailId;
