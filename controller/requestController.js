@@ -209,25 +209,30 @@ const requestController ={
 
     },
     assign: async (req,res,next)=>{
-        let detailId = req.body.detailId;
-        let detail = await RequestDetail.findOne({_id:detailId}) 
+        let id = req.body.id;
+        let order = await Request.findOne({_id:id}) 
         .then(data=>data)
         .catch(err=>res.status(500).send(err))
-        console.log(detail)
-        if(detail){
-            if(detail.status=="notDone"){
-                detail.status ="assigned";
-                await detail.save()
-                .then(data=>res.status(200) .send("success"))
-                .catch(err => res.status(500).send(err) )
+        let scheduleIds = order.scheduleIds;
+        console.log(scheduleIds)
+        for (let scheduleId of scheduleIds) {
+            let schedule = await RequestDetail.findOne({ _id: scheduleId });
+            if (!schedule) {
+                return res.status(500).send(`Cannot find schedule with ID`);
             }
-            else{
-                res.status(500).send("can not change status of detail") 
+
+            if (schedule.status === "notDone") {
+                schedule.status = "assigned";
+                 await schedule.save();
+            } else {
+                return res.status(500).send("Cannot change status of detail");
             }
         }
-        else{
-            res.status(500).send("can not find detail")        
-        }
+
+        order.status = "assigned";
+        await order.save()
+        .then(()=>res.status(200).json("success"))
+        .catch((err)=> res.status(500).json(err))
     },
     startWork:  async (req,res,next)=>{
         let detailId = req.body.detailId;
