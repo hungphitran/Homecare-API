@@ -1,4 +1,9 @@
 const RequestDetail = require('../model/requestDetail.model')
+const GeneralSetting = require('../model/general.model')
+const moment = require("moment");
+const mongoose = require('mongoose')
+
+
 
 const requestDetailController ={
     getByIds: async (req,res,next)=>{
@@ -14,7 +19,7 @@ const requestDetailController ={
         .sort({ workingDate: -1 })
         .then(data=>res.status(200).json(data))
         .catch((err)=> res.status(500).json(err))
-    }
+    },    
 }
 
 module.exports = requestDetailController;

@@ -2,11 +2,43 @@ const Request = require('../model/request.model')
 const RequestDetail= require('../model/requestDetail.model')
 const generalController = require('./generalController')
 const mongoose = require('mongoose');
-const { ObjectId } = mongoose.Types;
+const GeneralSetting = require('../model/general.model')
+const Service = require('../model/service.model')
+const CostFactor = require('../model/costFactorType.model')
+const Helper = require('../model/helper.model')
 const dayjs = require('dayjs');
 const moment = require('moment');
 
+async function calculateCost(workDate,startTime, endTime, coefficient_service, coefficient_helper) {
+    const generalSetting = await GeneralSetting.findOne({}).select("officeStartTime officeEndTime baseSalary");
+    const coefficient_others = await CostFactor.findOne({}).select("coefficientList");
+    const coefficient_OT = coefficient_others.coefficientList[0].value;
+    const coefficient_weekend = coefficient_others.coefficientList[1].value;
+    // const coefficient_holiday = coefficient_others.coefficientList[2].value;
+    const coefficient_holiday = 1;
 
+    console.log("General Setting: ", generalSetting);
+    const hoursDiff = Math.ceil(endTime.getUTCHours() - startTime.getUTCHours());
+    const officeStartTime = moment(generalSetting.officeStartTime, "HH:mm").hours();
+    const officeEndTime = moment(generalSetting.officeEndTime, "HH:mm").hours();
+    const OTStartTime = officeStartTime - startTime.getUTCHours() >= 0 ? officeStartTime - startTime.getUTCHours() : 0;
+    const OTEndTime = endTime.getUTCHours() - officeEndTime >= 0 ? endTime.getUTCHours() - officeStartTime : 0;
+    const OTTotalHour = OTStartTime + OTEndTime;
+    console.log("OTStartTime: ", OTStartTime);
+    console.log("OTEndTime: ", OTEndTime); 
+    console.log("OTTotalHour: ", OTTotalHour);
+    console.log("hoursDiff: ", hoursDiff);
+    console.log("coefficient_service: ", coefficient_service);
+    console.log("coefficient_helper: ", coefficient_helper);
+    console.log("coefficient_OT: ", coefficient_OT);
+
+    const dayOfWeek = dayjs(workDate).day();
+    const isWeekend = (dayOfWeek === 0 || dayOfWeek === 6);
+    const applicableWeekendCoefficient = isWeekend ? coefficient_weekend : 1;
+
+    const totalCost = generalSetting.baseSalary * coefficient_service * coefficient_helper * ((coefficient_OT * OTTotalHour) + (coefficient_weekend * (hoursDiff - OTTotalHour)));
+    return totalCost;
+}
 
 const calculateTotalCost = (servicePrice, startTime, endTime,workDate,officeStartTime,officeEndTime,coefficient_other,serviceFactor) => {
     if (!servicePrice || !startTime || !endTime || !workDate ||  !coefficient_other || !officeStartTime || !officeEndTime || !serviceFactor) {
@@ -98,27 +130,68 @@ const requestController ={
         req.body.orderDate =new Date(req.body.orderDate)
         req.body.startTime = new Date(req.body.startTime+"Z")
         req.body.endTime = new Date(req.body.endTime+"Z")
+        console.log("start time",req.body.startTime)
+        console.log("end time",req.body.endTime)
+        let service=  await Service.findOne({_id:req.body.service_id}).select("coefficient_id")
+        let serviceFactor = await CostFactor.findOne({})
+        .then(data=>{
+            return data.coefficientList;//get all the coefficient of  services
+        })
+        .then(coefs=>{
+            return coefs.filter((coef,index)=>{
+                return coef._id == service.coefficient_id;
+            })
+        })
+        .then(coef=>{
+            return coef[0].value;
+        })
 
         let dates =(req.body.startDate).split(',')
         dates=dates.filter((value,index)=>{
             return value;
         })
         let scheduleIds= []
+        let startTime = req.body.startTime//moment(`${moment().format('YYYY-MM-DD')} ${req.body.startTime}`, 'YYYY-MM-DD HH:mm').add(7, 'hours').toDate();
+        let endTime = req.body.endTime//moment(`${moment().format('YYYY-MM-DD')} ${req.body.endTime}`, 'YYYY-MM-DD HH:mm').add(7, 'hours').toDate();
+        let helperId = req.body.helperId || req.body.helper_id||"";
+        let coef_helper=0 ;
+        if(helperId){
+            coef_helper = await Helper.findOne({_id:helperId})
+            .then(data=>{
+                console.log("coefficient id",data)
+                return data.baseFactor;//get the coefficient 
+            })
+        }
+
+        // if(helperId){
+        //     coef_helper = await GeneralSetting.findOne({})
+        //     .then(data=>data[0].coefficientList)//get all the coefficient of helpers
+        //     .then(coefs=>{
+        //         return coefs.filter((coef,index)=>{
+        //             return coef._id == helperId;
+        //         })
+        //     })
+        // }
+
+        let totalHelperCost = 0;
         for(let workingDate of dates){
+            let helperCost = await calculateCost(new Date(workingDate),startTime, endTime, serviceFactor, coef_helper)
+            console.log("helper cost",helperCost)
+            totalHelperCost += helperCost;
             let reqDetail= new RequestDetail({
                 startTime:req.body.startTime,
                 endTime :req.body.endTime,
                 workingDate: new Date(workingDate),
-                helper_id:req.body.helperId || req.body.helper_id || "notAvailable",
-                helper_cost: 0,
+                helper_id: helperId|| "notAvailable",
+                helper_cost:  helperCost || 0,
                 status: "notDone"
             })
-
+            console.log("reqDetail",reqDetail)
             await reqDetail.save()
             .then(()=>scheduleIds.push(reqDetail._id))
             .catch(err=>res.status(500).send(err))
         }
-
+        console.log("total helper cost",totalHelperCost, "total cost",req.body.totalCost)
         let location = req.body.location ||{  //handle location
             province:req.body.province,
             district:req.body.district,
@@ -135,9 +208,11 @@ const requestController ={
             requestType:req.body.requestType,
             service:req.body.service,
             location:location,
+            profit: (req.body.totalCost-totalHelperCost)||0,
             totalCost:req.body.totalCost,
             status:  "notDone"
         })
+        console.log("new order",newOrder)
         await newOrder.save()
         .then(()=>res.status(200).json("success"))
         .catch((err)=> res.status(500).json(err))
@@ -273,28 +348,19 @@ const requestController ={
         .then(data=>data)
         .catch(err=>res.status(500).send(err))
 
-        let request  = await Request.findOne({scheduleIds : new mongoose.Types.ObjectId(detailId)}).populate("scheduleIds")
-        .then(data=>data)
-        .catch(err=>res.status(500).send(err))
+        // let request  = await Request.findOne({scheduleIds : new mongoose.Types.ObjectId(detailId)}).populate("scheduleIds")
+        // .then(data=>data)
+        // .catch(err=>res.status(500).send(err))
 
         if(detail){
             if(detail.status=="processing"){
-                detail.status ="done";
+                detail.status ="waitPayment";
 
-                for(let scheduleId of request.scheduleIds){
-                    let schedule = await RequestDetail.findOne({_id:scheduleId})
-                    .then(data=>data)
-                    .catch(err=>res.status(500).send(err))
-                    if(schedule.status!="done"){
-                        await detail.save()
-                        .then(data=>res.status(200) .send("success"))
-                        .catch(err => res.status(500).send(err) )
-                    }
-                }
-                request.status = "waitPayment";
-                await request.save()
-                .catch(err => res.status(500).send(err))
-
+                // for(let scheduleId of request.scheduleIds){
+                //     let schedule = await RequestDetail.findOne({_id:scheduleId})
+                //     .then(data=>data)
+                //     .catch(err=>res.status(500).send(err))
+                // }
                 await detail.save()
                 .then(data=>res.status(200) .send("success"))
                 .catch(err => res.status(500).send(err))
@@ -309,58 +375,72 @@ const requestController ={
     },
     finishPayment: async (req,res,next)=>{
         try {
-            let id = req.body.id;
-            let order = await Request.findOne({ _id: id }).then(data => data)
-            if (!order) {
-                return res.status(500).send("Cannot find order");
+            let detailId = req.body.detailId;
+            let detail = await RequestDetail.findOne({ _id: detailId }).then(data => data)
+            let request  = await Request.findOne({scheduleIds : new mongoose.Types.ObjectId(detailId)}).populate("scheduleIds")
+            .then(data=>data)
+            .catch(err=>res.status(500).send(err))
+            if (!detail) {
+                return res.status(500).send("Cannot find detail");
             }
-    
-            let scheduleIds = order.scheduleIds;
-            console.log(scheduleIds)
-            for (let scheduleId of scheduleIds) {
-                let schedule = await RequestDetail.findOne({ _id: scheduleId });
-                console.log(schedule)
+            else if(detail.status == "waitPayment") {
+                detail.status = "done";
+                for(let scheduleId of request.scheduleIds){
+                    let schedule = await RequestDetail.findOne({_id:scheduleId})
+                    .then(data=>data)
+                    .catch(err=>res.status(500).send(err))
+                    if(schedule.status!="done"){
+                        await detail.save();
+                        res.status(200).send("Success");
+                    }
+                }
+                request.status = "done";
+                await request.save()
+                .then(()=>console.log("success"))
+                .catch(err => res.status(500).send(err))
+                return res.status(200).send("Success");
+            }
+            return res.status(500).send("Cannot change status of detail");
 
-                if (!schedule) {
-                    return res.status(500).send(`Cannot find schedule with ID`);
-                }
-    
-                if (schedule.status != "done"){
-                    return res.status(500).send("Cannot change status of detail");
-                }
-            }
-    
-            order.status = "done";
-            await order.save();
-            return res.status(200).send("Success");
         } catch (err) {
             console.error(err);
             return res.status(500).send(err.message || "An error occurred");
         }
     },
-    // confirmFinish:  async (req,res,next)=>{
-    //     try {
-    //         let id = req.body.id;
-    //         let order = await Request.findOne({ _id: id }).then(data => data)
-    //         if (!order) {
-    //             return res.status(500).send("Cannot find order");
-    //         }
-    //         order.status = "waitPayment";
-    //         await order.save();
-    //         return res.status(200).send("Success");
-    //     } catch (err) {
-    //         console.error(err);
-    //         return res.status(500).send(err.message || "An error occurred");
-    //     }
-    // },
+    rejectHelper:  async (req,res,next)=>{
+        try {
+            let id = req.body.id;
+            let order = await Request.findOne({ _id: id }).then(data => data)
+            if (!order) {
+                return res.status(500).send("Cannot find order");
+            }
+            for(let scheduleId of order.scheduleIds){
+                let schedule = await RequestDetail.findOne({_id:scheduleId})
+                .then(data=>data)
+                .catch(err=>res.status(500).send(err))
+                schedule.helper_id = "notAvailable"
+                schedule.save()
+                .then(()=>console.log("Schedule updated successfully"))
+                .catch(err=>res.status(500).send(err))
+            }
+            res.status(200).send("Success")
+
+        } catch (err) {
+            console.error(err);
+            return res.status(500).send(err.message || "An error occurred");
+        }
+    },
 
     calculateCost: async (req,res,next)=>{
         console.log(req.body)
         const {servicePrice, startTime, endTime,workDate,officeStartTime,officeEndTime,coefficient_other,serviceFactor} = req.body;
-
         let cost = calculateTotalCost(servicePrice, startTime, endTime,workDate,officeStartTime,officeEndTime,coefficient_other,serviceFactor)
         res.status(200).json(cost)
     }
+    ,
+    
+
+    
 }
 
 module.exports = requestController;
