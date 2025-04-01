@@ -132,7 +132,7 @@ const requestController ={
         req.body.endTime = new Date(req.body.endTime+"Z")
         console.log("start time",req.body.startTime)
         console.log("end time",req.body.endTime)
-        let service=  await Service.findOne({_id:req.body.service_id}).select("coefficient_id")
+        let service=  await Service.findOne({title:req.body.service.title}).select("coefficient_id")
         let serviceFactor = await CostFactor.findOne({})
         .then(data=>{
             return data.coefficientList;//get all the coefficient of  services
