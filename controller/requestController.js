@@ -40,11 +40,30 @@ async function calculateCost(workDate,startTime, endTime, coefficient_service, c
     return totalCost;
 }
 
-const calculateTotalCost = (servicePrice, startTime, endTime,workDate,officeStartTime,officeEndTime,coefficient_other,serviceFactor) => {
-    if (!servicePrice || !startTime || !endTime || !workDate ||  !coefficient_other || !officeStartTime || !officeEndTime || !serviceFactor) {
+async function calculateTotalCost (serviceTitle, startTime, endTime,workDate) {
+    if ( !startTime || !endTime || !workDate || !serviceTitle) {
+        console.log("Missing required parameters: startTime, endTime, workDate, serviceTitle");
         return 0;
     }  
 
+    const generalSetting = await GeneralSetting.findOne({}).select("officeStartTime officeEndTime");
+    let officeStartTime = generalSetting.officeStartTime;
+    let officeEndTime = generalSetting.officeEndTime;
+
+    const service = await Service.findOne({title:serviceTitle}).select("coefficient_id basicPrice")
+    const servicePrice = service.basicPrice;
+    const serviceFactor = await CostFactor.findOne(
+        { applyTo: "service" },
+        { coefficientList: { $elemMatch: { _id: service.coefficient_id }}} )
+        .then(data=>{
+            console.log("serviceFactor",data)
+            return data.coefficientList[0].value;//get the coefficient of service
+        })
+
+    const coefficient_other = await CostFactor.findOne({applyTo:"other"}).select("coefficientList")
+
+    console.log("coefficient_other",coefficient_other)
+    console.log("serviceFactor",serviceFactor)
 
     const basicCost = parseFloat(servicePrice);
     const HSDV = parseFloat(serviceFactor);
@@ -172,17 +191,23 @@ const requestController ={
         //         })
         //     })
         // }
-
+        
         let totalHelperCost = 0;
         for(let workingDate of dates){
             let helperCost = await calculateCost(new Date(workingDate),startTime, endTime, serviceFactor, coef_helper)
             console.log("helper cost",helperCost)
+            let cost =await calculateTotalCost(req.body.service.title, startTime, endTime,workingDate)
+            .then(data=>{  
+                console.log("cost",data)
+                return data.totalCost;
+            })
             totalHelperCost += helperCost;
             let reqDetail= new RequestDetail({
                 startTime:req.body.startTime,
                 endTime :req.body.endTime,
                 workingDate: new Date(workingDate),
                 helper_id: helperId|| "notAvailable",
+                totalCost: cost || 0,
                 helper_cost:  helperCost || 0,
                 status: "notDone"
             })
@@ -320,7 +345,8 @@ const requestController ={
         let request  = await Request.findOne({scheduleIds : new mongoose.Types.ObjectId(detailId)}).populate("scheduleIds")
         .then(data=>data)
         .catch(err=>res.status(500).send(err))
-
+        console.log("request",request)
+        console.log("detail",detail)
         if(detail){
             request.status = "processing";
             await request.save()
@@ -336,7 +362,6 @@ const requestController ={
             else{
                 res.status(500).send("can not change status of detail") 
             }
-
         }
         else{
             res.status(500).send("can not find detail")        
@@ -433,8 +458,13 @@ const requestController ={
 
     calculateCost: async (req,res,next)=>{
         console.log(req.body)
-        const {servicePrice, startTime, endTime,workDate,officeStartTime,officeEndTime,coefficient_other,serviceFactor} = req.body;
-        let cost = calculateTotalCost(servicePrice, startTime, endTime,workDate,officeStartTime,officeEndTime,coefficient_other,serviceFactor)
+        const { serviceTitle,startTime, endTime,workDate} = req.body;
+        let cost = await calculateTotalCost(serviceTitle,startTime, endTime,workDate)
+        .then(data=>{
+            console.log("cost",data)
+            return data;
+        })
+        .catch(err=>res.status(500).send("không thể tính toán chi phí"))
         res.status(200).json(cost)
     }
     ,
