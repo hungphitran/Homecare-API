@@ -207,7 +207,7 @@ const requestController ={
                 endTime :req.body.endTime,
                 workingDate: new Date(workingDate),
                 helper_id: helperId|| "notAvailable",
-                totalCost: cost || 0,
+                cost: cost || 0,
                 helper_cost:  helperCost || 0,
                 status: "notDone"
             })

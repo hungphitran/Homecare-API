@@ -5,7 +5,7 @@ const requestDetailSchema = new mongoose.Schema({
     startTime: Date, // Giờ bắt đầu làm việc
     endTime: Date, // Giờ kết thúc làm việc
     helper_id: String,
-    totalCost: Number, // Tổng tiền đơn nhỏ
+    cost: Number, // Tổng tiền đơn nhỏ
     comment: {
         review: { type: String, default: '' },
         loseThings: { type: Boolean, default: false },
