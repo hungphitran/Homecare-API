@@ -11,12 +11,14 @@ const requestDetailController ={
         let ids=req.query.ids.split(',')
         //get all the requests which id in ids
         await RequestDetail.find({'_id':{$in : ids}})
+        .select('-__v -createdAt -updatedAt -deletedAt')
         .then(data=>res.status(200).json(data))
         .catch((err)=> res.status(500).json(err))
     },
     getByHelperId: async (req,res,next)=>{
         await RequestDetail.find({helper_id:req.params.id})
-        .sort({ workingDate: -1 })
+        .select('-__v -createdAt -updatedAt -deletedAt')
+        .sort({ workingDate: -1 })// sort by working date
         .then(data=>res.status(200).json(data))
         .catch((err)=> res.status(500).json(err))
     },    

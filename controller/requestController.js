@@ -271,11 +271,13 @@ const requestController ={
     // GET all request in database
     getAll: async (req,res,next)=>{
         await Request.find()
+        .select('-__v -createdBy -updatedBy -deletedBy -deleted -profit -createdAt -updatedAt')
         .then((data)=>res.status(200).json(data))
         .catch((err)=> res.status(500).json(err))
     },
     getByPhone: async (req,res,next)=>{
         await Request.find({"customerInfo.phone":req.params.phone})
+        .select('-__v -createdBy -updatedBy -deletedBy -deleted -profit -createdAt -updatedAt')
         .then((data)=>res.status(200).json(data))
         .catch((err)=> res.status(500).json(err))
     },
@@ -467,7 +469,6 @@ const requestController ={
         .catch(err=>res.status(500).send("không thể tính toán chi phí"))
         res.status(200).json(cost)
     }
-    ,
     
 
     
