@@ -20,6 +20,18 @@ const requestDetailController ={
         .then(data=>res.status(200).json(data))
         .catch((err)=> res.status(500).json(err))
     },    
+    //update the request detail with the review
+    postReview: async (req,res,next)=>{
+        //update the request detail with the review
+        console.log(req.body)
+        await RequestDetail.findByIdAndUpdate(req.body.detailId,{
+            $set:{
+                'comment':req.body.comment,
+            }
+        })
+        .then(data=>res.status(200).json("success"))
+        .catch((err)=> res.status(500).json(err))
+    }
 }
 
 module.exports = requestDetailController;
