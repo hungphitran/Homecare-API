@@ -196,6 +196,8 @@ const requestController ={
         for(let workingDate of dates){
             let helperCost = await calculateCost(new Date(workingDate),startTime, endTime, serviceFactor, coef_helper)
             console.log("helper cost",helperCost)
+            startTime = new Date(startTime).toISOString().substring(11, 16);
+            endTime = new Date(endTime).toISOString().substring(11, 16);
             let cost =await calculateTotalCost(req.body.service.title, startTime, endTime,workingDate)
             .then(data=>{  
                 console.log("cost",data)
