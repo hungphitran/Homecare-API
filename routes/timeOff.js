@@ -1,7 +1,8 @@
 const timeOffController = require('../controller/timeOffController');
 const router = require('express').Router();
+const { authenticateToken, requireHelper } = require('../middleware/auth')
 
-router.get('/test', timeOffController.test);
-router.get('/:id', timeOffController.getAll);
+// Helper can get their own time off
+router.get('/:id', authenticateToken, requireHelper, timeOffController.getAll);
 
 module.exports = router;

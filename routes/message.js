@@ -1,8 +1,5 @@
-const messageController= require('../controller/messageController')
-const router= require('express').Router()
+const router = require('express').Router()
 
-router.post('/',messageController.send)
-router.get('/',messageController.get)
+// Message routes are disabled - OTP/ZNS functionality removed
 
-
-module.exports=router;
+module.exports = router;

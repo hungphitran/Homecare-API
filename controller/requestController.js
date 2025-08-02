@@ -144,7 +144,7 @@ const requestController ={
             }
             req.body.orderDate = tmp[0]+"-"+month+"-"+day;
 
-        req.body.customerInfo.usedpoint=0;
+        req.body.customerInfo.usedPoint=0;
 
         req.body.orderDate =new Date(req.body.orderDate)
         req.body.startTime = new Date(req.body.startTime+"Z")
@@ -285,33 +285,42 @@ const requestController ={
     },
 
     cancelRequest: async (req,res,next)=>{
-        let request =await Request.findById(req.body.id)
+        let request = await Request.findById(req.body.id)
         .then((data)=>data)
         .catch((err)=> res.status(500).json(err))
-            for(let scheduleId of request.scheduleIds){
-                await RequestDetail.findById(scheduleId)
-                .then(
-                    async (schedule)=>{
-                    if(schedule.status!="notDone"){
-                        res.status(500).json("cannot cancel this request")
-                    }
-                })
-                .catch((err)=> res.status(500).json(err))
-            }
-            for(let scheduleId of request.scheduleIds){
-                await RequestDetail.findOne(scheduleId)
-                .then(async (schedule)=>{
-                    schedule.status="cancelled"
-                    await schedule.save()
-                    .then(()=>console.log("success"))
-                    .catch((err)=> res.status(500).json(err))
-                })
-                .catch((err)=> res.status(500).json(err))
-            }
-            request.status="cancelled"
-            await request.save()
-            .then(()=>res.status(200).json("success"))
+        
+        // Kiểm tra quyền: customer chỉ có thể cancel request của mình
+        if(req.user.role === 'customer' && request.customerInfo.phone !== req.user.phone) {
+            return res.status(403).json({
+                error: 'Access denied',
+                message: 'Bạn chỉ có thể hủy request của chính mình'
+            });
+        }
+
+        for(let scheduleId of request.scheduleIds){
+            await RequestDetail.findById(scheduleId)
+            .then(
+                async (schedule)=>{
+                if(schedule.status!="notDone"){
+                    res.status(500).json("cannot cancel this request")
+                }
+            })
             .catch((err)=> res.status(500).json(err))
+        }
+        for(let scheduleId of request.scheduleIds){
+            await RequestDetail.findOne(scheduleId)
+            .then(async (schedule)=>{
+                schedule.status="cancelled"
+                await schedule.save()
+                .then(()=>console.log("success"))
+                .catch((err)=> res.status(500).json(err))
+            })
+            .catch((err)=> res.status(500).json(err))
+        }
+        request.status="cancelled"
+        await request.save()
+        .then(()=>res.status(200).json("success"))
+        .catch((err)=> res.status(500).json(err))
 
     },
     assign: async (req,res,next)=>{
@@ -461,15 +470,16 @@ const requestController ={
     },
 
     calculateCost: async (req,res,next)=>{
-        console.log(req.body)
-        const { serviceTitle,startTime, endTime,workDate} = req.body;
-        let cost = await calculateTotalCost(serviceTitle,startTime, endTime,workDate)
-        .then(data=>{
-            console.log("cost",data)
-            return data;
-        })
-        .catch(err=>res.status(500).send("không thể tính toán chi phí"))
-        res.status(200).json(cost)
+        try {
+            console.log(req.body)
+            const { serviceTitle,startTime, endTime,workDate} = req.body;
+            let cost = await calculateTotalCost(serviceTitle,startTime, endTime,workDate)
+            console.log("cost",cost)
+            res.status(200).json(cost)
+        } catch (error) {
+            console.error("Error calculating cost:", error);
+            res.status(500).json({error: "không thể tính toán chi phí"})
+        }
     }
     
 

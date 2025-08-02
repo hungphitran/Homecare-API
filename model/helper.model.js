@@ -3,6 +3,7 @@ const mongoose = require("mongoose");
 const helperSchema = new mongoose.Schema({
     helper_id: String,
     fullName: String,
+    password: String, // Thêm field password
     startDate: {
         type: Date,
         default: Date.now()

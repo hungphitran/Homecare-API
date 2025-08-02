@@ -1,16 +1,26 @@
 const requestController = require('../controller/requestController')
-const router= require('express').Router()
+const router = require('express').Router()
+const { authenticateToken, requireHelper, requireCustomer, requireOwnership } = require('../middleware/auth')
 
-router.post('/calculateCost',requestController.calculateCost);
-router.post('/finishpayment',requestController.finishPayment)
-router.post('/finish',requestController.finishRequest)
-router.post('/processing',requestController.startWork)
-router.post('/assign',requestController.assign)
-router.post('/reject',requestController.rejectHelper)
-//router.post('/waitpayment',requestController.confirmFinish)
-router.post('/cancel',requestController.cancelRequest)
-router.get('/:phone',requestController.getByPhone);
-router.get('/',requestController.getAll);
-router.post('/',requestController.create);
+// Public - calculate cost (không cần xác thực để estimate)
+router.post('/calculateCost', requestController.calculateCost);
+
+// Helper only - payment and work status management
+router.post('/finishpayment', authenticateToken, requireHelper, requestController.finishPayment)
+router.post('/finish', authenticateToken, requireHelper, requestController.finishRequest)
+router.post('/processing', authenticateToken, requireHelper, requestController.startWork)
+
+// Helper only - assignment and management
+router.post('/assign', authenticateToken, requireHelper, requestController.assign)
+router.post('/reject', authenticateToken, requireHelper, requestController.rejectHelper)
+
+// Customer can cancel their own requests
+router.post('/cancel', authenticateToken, requireCustomer, requestController.cancelRequest)
+
+// Customer can get their own requests
+router.get('/:phone', authenticateToken, requireOwnership, requestController.getByPhone);
+
+// Customer can create requests
+router.post('/', authenticateToken, requireCustomer, requestController.create);
 
 module.exports = router;

@@ -1,9 +1,11 @@
 const customerController = require('../controller/customerController')
 const router = require('express').Router()
+const { authenticateToken, requireOwnership } = require('../middleware/auth')
 
+// Customer can get their own info only
+router.get('/:phone', authenticateToken, requireOwnership, customerController.getOne)
 
-router.patch('/:phone',customerController.update)
-router.get('/:phone',customerController.getOne)
-router.post('/',customerController.create)
-router.get('/',customerController.getAll)
+// Customer can update their own info only
+router.patch('/:phone', authenticateToken, requireOwnership, customerController.update)
+
 module.exports = router;

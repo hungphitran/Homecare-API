@@ -1,20 +1,31 @@
 {
-  "name": "api",
+  "name": "homecare-api",
   "version": "1.0.0",
+  "description": "Homecare API - Dịch vụ chăm sóc tại nhà với JWT Authentication",
   "main": "index.js",
   "scripts": {
-    "start": "nodemon index",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node index.js",
+    "dev": "nodemon index.js",
+    "vercel-build": "echo 'Build completed'",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "check-passwords": "node scripts/checkPasswordInfo.js",
+    "reset-passwords": "node scripts/resetPasswordsSafe.js",
+    "reset-passwords-force": "node scripts/resetPasswords.js"
   },
+  "keywords": ["homecare", "api", "nodejs", "mongodb", "jwt", "vercel"],
   "author": "tran phi hung",
   "license": "ISC",
-  "description": "",
+  "engines": {
+    "node": ">=16.x"
+  },
   "dependencies": {
+    "bcrypt": "^6.0.0",
     "body-parser": "^1.20.2",
     "cors": "^2.8.5",
     "dayjs": "^1.11.13",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
+    "jsonwebtoken": "^9.0.2",
     "moment": "^2.30.1",
     "mongoose": "^8.5.4"
   },

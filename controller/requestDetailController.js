@@ -16,6 +16,17 @@ const requestDetailController ={
         .catch((err)=> res.status(500).json(err))
     },
     getByHelperId: async (req,res,next)=>{
+        // Kiểm tra quyền: helper chỉ có thể xem request detail của mình
+        // req.params.id là helper_id (string như "HLP001") 
+        // req.user.helper_id từ JWT payload
+        if(req.user.role === 'helper' && req.params.id !== req.user.helper_id) {
+            return res.status(403).json({
+                error: 'Access denied', 
+                message: 'Bạn chỉ có thể xem request detail của chính mình'
+            });
+        }
+
+        // Tìm theo helper_id (string) chứ không phải ObjectId
         await RequestDetail.find({helper_id:req.params.id})
         .select('-__v -createdAt -updatedAt -deletedAt')
         .sort({ workingDate: -1 })// sort by working date
