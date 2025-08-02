@@ -128,21 +128,34 @@ async function calculateTotalCost (serviceTitle, startTime, endTime,workDate) {
 const requestController ={
     //POST a new request
     create: async (req,res,next)=>{
-        console.log(req.body)
-        if( typeof req.body.customerInfo == "string"){
-            req.body.customerInfo = JSON.parse(req.body.customerInfo);
-        }
+        try {
+            console.log(req.body)
+            if( typeof req.body.customerInfo == "string"){
+                req.body.customerInfo = JSON.parse(req.body.customerInfo);
+            }
+            
+            // Handle orderDate - derive from startTime if not provided
             let orderDate = req.body.orderDate;
-            let tmp=orderDate.split('-')
-            let month = tmp[1];
-            if(month.length<2){
-                month="0"+month;
+            if (!orderDate && req.body.startTime) {
+                // Extract date from startTime ISO string (e.g., "2025-08-04T06:30:00.000Z" -> "2025-08-04")
+                orderDate = new Date(req.body.startTime).toISOString().split('T')[0];
             }
-            let day = tmp[2];  
-            if(day.length<2){
-                day="0"+day;
+            
+            if (orderDate) {
+                let tmp = orderDate.split('-');
+                let month = tmp[1];
+                if(month.length<2){
+                    month="0"+month;
+                }
+                let day = tmp[2];  
+                if(day.length<2){
+                    day="0"+day;
+                }
+                req.body.orderDate = tmp[0]+"-"+month+"-"+day;
+            } else {
+                // Set orderDate to current date if neither orderDate nor startTime is provided
+                req.body.orderDate = new Date().toISOString().split('T')[0];
             }
-            req.body.orderDate = tmp[0]+"-"+month+"-"+day;
 
         req.body.customerInfo.usedPoint=0;
 
@@ -151,9 +164,26 @@ const requestController ={
         req.body.endTime = new Date(req.body.endTime+"Z")
         console.log("start time",req.body.startTime)
         console.log("end time",req.body.endTime)
-        let service=  await Service.findOne({title:req.body.service.title}).select("coefficient_id")
+        
+        // Check if service title is provided
+        if (!req.body.service || !req.body.service.title) {
+            return res.status(400).json({
+                success: false,
+                message: "Service title is required"
+            });
+        }
+        
+        let service = await Service.findOne({title:req.body.service.title}).select("coefficient_id")
+        if (!service) {
+            return res.status(404).json({
+                success: false,
+                message: `Service "${req.body.service.title}" not found`
+            });
+        }
+        
         let serviceFactor = await CostFactor.findOne({})
         .then(data=>{
+            if (!data) throw new Error("Cost factor not found");
             return data.coefficientList;//get all the coefficient of  services
         })
         .then(coefs=>{
@@ -162,10 +192,18 @@ const requestController ={
             })
         })
         .then(coef=>{
+            if (!coef || coef.length === 0) throw new Error("Service coefficient not found");
             return coef[0].value;
         })
 
-        let dates =(req.body.startDate).split(',')
+        // Handle startDate - derive from startTime if not provided
+        let startDate = req.body.startDate;
+        if (!startDate && req.body.startTime) {
+            // Extract date from startTime ISO string and use it as startDate
+            startDate = new Date(req.body.startTime).toISOString().split('T')[0];
+        }
+        
+        let dates = startDate ? startDate.split(',') : [];
         dates=dates.filter((value,index)=>{
             return value;
         })
@@ -243,6 +281,13 @@ const requestController ={
         await newOrder.save()
         .then(()=>res.status(200).json("success"))
         .catch((err)=> res.status(500).json(err))
+        } catch (error) {
+            console.error("Error in create request:", error);
+            res.status(500).json({
+                success: false,
+                message: error.message || "Internal server error"
+            });
+        }
     },
     confirm: async (req,res,next)=>{
         let id = req.body.id;
@@ -471,14 +516,81 @@ const requestController ={
 
     calculateCost: async (req,res,next)=>{
         try {
-            console.log(req.body)
-            const { serviceTitle,startTime, endTime,workDate} = req.body;
-            let cost = await calculateTotalCost(serviceTitle,startTime, endTime,workDate)
-            console.log("cost",cost)
+            console.log("Request body:", req.body)
+            const { serviceId, serviceTitle, startTime, endTime, workDate, location } = req.body;
+            
+            // Handle different input formats
+            let finalServiceTitle = serviceTitle;
+            let finalStartTime = startTime;
+            let finalEndTime = endTime;
+            let finalWorkDate = workDate;
+            
+            // If serviceId is provided instead of serviceTitle, look up the service
+            if (serviceId && !serviceTitle) {
+                const service = await Service.findById(serviceId).select("title");
+                if (!service) {
+                    return res.status(404).json({
+                        error: "Service not found",
+                        message: `Service with ID "${serviceId}" not found`
+                    });
+                }
+                finalServiceTitle = service.title;
+                console.log("Resolved service title:", finalServiceTitle);
+            }
+            
+            // Handle ISO timestamp format (e.g., "2025-08-14T06:30:00:00.000Z")
+            if (startTime && startTime.includes('T')) {
+                const startDate = new Date(startTime);
+                const endDate = new Date(endTime);
+                
+                // Extract date for workDate if not provided
+                if (!workDate) {
+                    finalWorkDate = startDate.toISOString().split('T')[0]; // YYYY-MM-DD format
+                }
+                
+                // Extract time in HH:mm format
+                finalStartTime = startDate.toTimeString().substring(0, 5); // HH:mm
+                finalEndTime = endDate.toTimeString().substring(0, 5); // HH:mm
+                
+                console.log("Converted times:", {
+                    originalStart: startTime,
+                    originalEnd: endTime,
+                    finalStartTime,
+                    finalEndTime,
+                    finalWorkDate
+                });
+            }
+            
+            // Validate required parameters
+            if (!finalServiceTitle || !finalStartTime || !finalEndTime || !finalWorkDate) {
+                console.error("Missing required parameters:", {
+                    serviceTitle: finalServiceTitle,
+                    startTime: finalStartTime,
+                    endTime: finalEndTime,
+                    workDate: finalWorkDate
+                });
+                return res.status(400).json({
+                    error: "Missing required parameters",
+                    message: "serviceTitle (or serviceId), startTime, endTime, and workDate are required",
+                    received: {
+                        serviceTitle: finalServiceTitle,
+                        startTime: finalStartTime,
+                        endTime: finalEndTime,
+                        workDate: finalWorkDate
+                    }
+                });
+            }
+            
+            let cost = await calculateTotalCost(finalServiceTitle, finalStartTime, finalEndTime, finalWorkDate)
+            console.log("Calculated cost:", cost)
             res.status(200).json(cost)
         } catch (error) {
             console.error("Error calculating cost:", error);
-            res.status(500).json({error: "không thể tính toán chi phí"})
+            res.status(500).json({
+                error: "Internal server error",
+                message: "Không thể tính toán chi phí",
+                details: error.message
+            })
         }
     }
     
