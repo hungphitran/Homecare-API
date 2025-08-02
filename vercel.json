@@ -1,6 +1,5 @@
 {
     "version": 2,
-    "name": "homecare-api",
     "builds": [
         {
             "src": "index.js",
@@ -15,10 +14,5 @@
     ],
     "env": {
         "NODE_ENV": "production"
-    },
-    "functions": {
-        "index.js": {
-            "maxDuration": 30
-        }
     }
 }
