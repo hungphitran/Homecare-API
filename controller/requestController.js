@@ -8,6 +8,7 @@ const CostFactor = require('../model/costFactorType.model')
 const Helper = require('../model/helper.model')
 const dayjs = require('dayjs');
 const moment = require('moment');
+const timeUtils = require('../utils/timeUtils');
 
 async function calculateCost(workDate,startTime, endTime, coefficient_service, coefficient_helper) {
     const generalSetting = await GeneralSetting.findOne({}).select("officeStartTime officeEndTime baseSalary");
@@ -70,8 +71,13 @@ async function calculateTotalCost (serviceTitle, startTime, endTime,workDate) {
     const HSovertime = parseFloat(coefficient_other.coefficientList[0].value);
     const HScuoituan = parseFloat(coefficient_other.coefficientList[1].value); 
   
-    const start = dayjs(moment(startTime, "HH:mm").toDate());
-    const end = dayjs(moment(endTime, "HH:mm").toDate());
+    let start = dayjs(moment(startTime, "HH:mm").toDate());
+    let end = dayjs(moment(endTime, "HH:mm").toDate());
+  
+    // Handle cross-midnight shifts
+    if (end.isBefore(start)) {
+        end = end.add(1, 'day');
+    }
   
     officeStartTime = dayjs(moment(officeStartTime, "HH:mm").toDate(), "HH:mm");
     officeEndTime = dayjs(moment(officeEndTime, "HH:mm").toDate(), "HH:mm");
@@ -80,18 +86,30 @@ async function calculateTotalCost (serviceTitle, startTime, endTime,workDate) {
 
       const dayOfWeek = dayjs(workDate).day();
 
-      const dailyHours = (end.diff(start, "hour",true));
+      const dailyHours = Math.abs(end.diff(start, "hour", true));
 
       
       let T1 = 0; 
       let T2 = 0; 
       
+      // Handle cross-midnight calculation differently
       if (start.isBefore(officeStartTime)) {
-        T1 += (officeStartTime.diff(start, "hour",true));
+        T1 += Math.abs(officeStartTime.diff(start, "hour", true));
       }
       
-      if (end.isAfter(officeEndTime)) {
-        T1 += (end.diff(officeEndTime, "hour",true));
+      // For cross-midnight shifts, we need to handle end time carefully
+      let endForComparison = end;
+      if (end.date() > start.date()) {
+        // Cross-midnight case: compare with office end time of the same day as start
+        const officeEndTimeNextDay = officeEndTime.add(1, 'day');
+        if (end.isAfter(officeEndTimeNextDay)) {
+          T1 += Math.abs(end.diff(officeEndTimeNextDay, "hour", true));
+        }
+      } else {
+        // Same day case
+        if (end.isAfter(officeEndTime)) {
+          T1 += Math.abs(end.diff(officeEndTime, "hour", true));
+        }
       }
       
       T2 = Math.max(0, dailyHours - T1);
@@ -134,36 +152,61 @@ const requestController ={
                 req.body.customerInfo = JSON.parse(req.body.customerInfo);
             }
             
-            // Handle orderDate - derive from startTime if not provided
-            let orderDate = req.body.orderDate;
-            if (!orderDate && req.body.startTime) {
-                // Extract date from startTime ISO string (e.g., "2025-08-04T06:30:00.000Z" -> "2025-08-04")
-                orderDate = new Date(req.body.startTime).toISOString().split('T')[0];
+            // Standardize time inputs using timeUtils
+            const standardizedStartTime = timeUtils.standardizeTime(req.body.startTime);
+            const standardizedEndTime = timeUtils.standardizeTime(req.body.endTime);
+            
+            if (!standardizedStartTime || !standardizedEndTime) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Invalid time format. Please use HH:mm or ISO format"
+                });
             }
             
-            if (orderDate) {
-                let tmp = orderDate.split('-');
-                let month = tmp[1];
-                if(month.length<2){
-                    month="0"+month;
-                }
-                let day = tmp[2];  
-                if(day.length<2){
-                    day="0"+day;
-                }
-                req.body.orderDate = tmp[0]+"-"+month+"-"+day;
-            } else {
-                // Set orderDate to current date if neither orderDate nor startTime is provided
-                req.body.orderDate = new Date().toISOString().split('T')[0];
+            // Validate time range
+            if (!timeUtils.isValidTimeRange(standardizedStartTime, standardizedEndTime)) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Invalid time range. End time must be after start time"
+                });
+            }
+            
+            // Handle orderDate - standardize and derive from startTime if not provided
+            let orderDate = req.body.orderDate;
+            if (!orderDate && req.body.startTime) {
+                orderDate = timeUtils.extractDate(req.body.startTime);
+            }
+            
+            const standardizedOrderDate = timeUtils.standardizeDate(orderDate) || timeUtils.standardizeDate(new Date());
+            
+            // Handle startDate - derive from startTime if not provided
+            let startDate = req.body.startDate;
+            if (!startDate && req.body.startTime) {
+                startDate = timeUtils.extractDate(req.body.startTime);
+            }
+            
+            // Format dates array
+            const workingDates = timeUtils.formatDateArray(startDate);
+            if (workingDates.length === 0) {
+                // If no working dates provided, use the order date
+                workingDates.push(standardizedOrderDate);
             }
 
-        req.body.customerInfo.usedPoint=0;
+            req.body.customerInfo.usedPoint = 0;
 
-        req.body.orderDate =new Date(req.body.orderDate)
-        req.body.startTime = new Date(req.body.startTime+"Z")
-        req.body.endTime = new Date(req.body.endTime+"Z")
-        console.log("start time",req.body.startTime)
-        console.log("end time",req.body.endTime)
+            // Convert standardized times back to Date objects for database storage
+            const baseDate = standardizedOrderDate;
+            const startTimeObj = timeUtils.timeToDate(standardizedStartTime, baseDate);
+            const endTimeObj = timeUtils.timeToDate(standardizedEndTime, baseDate);
+            
+            console.log("Standardized times:", {
+                startTime: standardizedStartTime,
+                endTime: standardizedEndTime,
+                startTimeObj,
+                endTimeObj,
+                orderDate: standardizedOrderDate,
+                workingDates
+            });
         
         // Check if service title is provided
         if (!req.body.service || !req.body.service.title) {
@@ -196,91 +239,74 @@ const requestController ={
             return coef[0].value;
         })
 
-        // Handle startDate - derive from startTime if not provided
-        let startDate = req.body.startDate;
-        if (!startDate && req.body.startTime) {
-            // Extract date from startTime ISO string and use it as startDate
-            startDate = new Date(req.body.startTime).toISOString().split('T')[0];
-        }
+        let scheduleIds = [];
+        let helperId = req.body.helperId || req.body.helper_id || "";
+        let coef_helper = 0;
         
-        let dates = startDate ? startDate.split(',') : [];
-        dates=dates.filter((value,index)=>{
-            return value;
-        })
-        let scheduleIds= []
-        let startTime = req.body.startTime//moment(`${moment().format('YYYY-MM-DD')} ${req.body.startTime}`, 'YYYY-MM-DD HH:mm').add(7, 'hours').toDate();
-        let endTime = req.body.endTime//moment(`${moment().format('YYYY-MM-DD')} ${req.body.endTime}`, 'YYYY-MM-DD HH:mm').add(7, 'hours').toDate();
-        let helperId = req.body.helperId || req.body.helper_id||"";
-        let coef_helper=0 ;
-        if(helperId){
-            coef_helper = await Helper.findOne({_id:helperId})
-            .then(data=>{
-                console.log("coefficient id",data)
-                return data.baseFactor;//get the coefficient 
-            })
+        if (helperId) {
+            coef_helper = await Helper.findOne({_id: helperId})
+            .then(data => {
+                console.log("coefficient id", data);
+                return data.baseFactor; // get the coefficient 
+            });
         }
-
-        // if(helperId){
-        //     coef_helper = await GeneralSetting.findOne({})
-        //     .then(data=>data[0].coefficientList)//get all the coefficient of helpers
-        //     .then(coefs=>{
-        //         return coefs.filter((coef,index)=>{
-        //             return coef._id == helperId;
-        //         })
-        //     })
-        // }
         
         let totalHelperCost = 0;
-        for(let workingDate of dates){
-            let helperCost = await calculateCost(new Date(workingDate),startTime, endTime, serviceFactor, coef_helper)
-            console.log("helper cost",helperCost)
-            startTime = new Date(startTime).toISOString().substring(11, 16);
-            endTime = new Date(endTime).toISOString().substring(11, 16);
-            let cost =await calculateTotalCost(req.body.service.title, startTime, endTime,workingDate)
-            .then(data=>{  
-                console.log("cost",data)
+        
+        for (let workingDate of workingDates) {
+            let helperCost = await calculateCost(new Date(workingDate), startTimeObj, endTimeObj, serviceFactor, coef_helper);
+            console.log("helper cost", helperCost);
+            
+            let cost = await calculateTotalCost(req.body.service.title, standardizedStartTime, standardizedEndTime, workingDate)
+            .then(data => {  
+                console.log("cost", data);
                 return data.totalCost;
-            })
+            });
+            
             totalHelperCost += helperCost;
-            let reqDetail= new RequestDetail({
-                startTime:req.body.startTime,
-                endTime :req.body.endTime,
+            
+            let reqDetail = new RequestDetail({
+                startTime: startTimeObj,
+                endTime: endTimeObj,
                 workingDate: new Date(workingDate),
-                helper_id: helperId|| "notAvailable",
+                helper_id: helperId || "notAvailable",
                 cost: cost || 0,
-                helper_cost:  helperCost || 0,
+                helper_cost: helperCost || 0,
                 status: "notDone"
-            })
-            console.log("reqDetail",reqDetail)
+            });
+            
+            console.log("reqDetail", reqDetail);
             await reqDetail.save()
-            .then(()=>scheduleIds.push(reqDetail._id))
-            .catch(err=>res.status(500).send(err))
+            .then(() => scheduleIds.push(reqDetail._id))
+            .catch(err => res.status(500).send(err));
         }
-        console.log("total helper cost",totalHelperCost, "total cost",req.body.totalCost)
-        let location = req.body.location ||{  //handle location
-            province:req.body.province,
-            district:req.body.district,
-            ward:req.body.ward,
-        }
+        
+        console.log("total helper cost", totalHelperCost, "total cost", req.body.totalCost);
+        
+        let location = req.body.location || {  // handle location
+            province: req.body.province,
+            district: req.body.district,
+            ward: req.body.ward,
+        };
 
-        let newOrder= new Request({
-            orderDate:req.body.orderDate,
-            requestType:req.body.requestType,
-            scheduleIds:scheduleIds,
-            startTime: req.body.startTime,
-            endTime: req.body.endTime,
-            customerInfo:req.body.customerInfo,
-            requestType:req.body.requestType,
-            service:req.body.service,
-            location:location,
-            profit: (req.body.totalCost-totalHelperCost)||0,
-            totalCost:req.body.totalCost,
-            status:  "notDone"
-        })
-        console.log("new order",newOrder)
+        let newOrder = new Request({
+            orderDate: new Date(standardizedOrderDate),
+            requestType: req.body.requestType,
+            scheduleIds: scheduleIds,
+            startTime: startTimeObj,
+            endTime: endTimeObj,
+            customerInfo: req.body.customerInfo,
+            service: req.body.service,
+            location: location,
+            profit: (req.body.totalCost - totalHelperCost) || 0,
+            totalCost: req.body.totalCost,
+            status: "notDone"
+        });
+        
+        console.log("new order", newOrder);
         await newOrder.save()
-        .then(()=>res.status(200).json("success"))
-        .catch((err)=> res.status(500).json(err))
+        .then(() => res.status(200).json("success"))
+        .catch((err) => res.status(500).json(err));
         } catch (error) {
             console.error("Error in create request:", error);
             res.status(500).json({
@@ -514,19 +540,23 @@ const requestController ={
         }
     },
 
-    calculateCost: async (req,res,next)=>{
+    calculateCost: async (req, res, next) => {
         try {
-            console.log("Request body:", req.body)
+            console.log("Request body:", req.body);
             const { serviceId, serviceTitle, startTime, endTime, workDate, location } = req.body;
             
-            // Handle different input formats
+            // Determine service title
             let finalServiceTitle = serviceTitle;
-            let finalStartTime = startTime;
-            let finalEndTime = endTime;
-            let finalWorkDate = workDate;
-            
-            // If serviceId is provided instead of serviceTitle, look up the service
             if (serviceId && !serviceTitle) {
+                // Check if serviceId is a valid ObjectId format
+                const mongoose = require('mongoose');
+                if (!mongoose.Types.ObjectId.isValid(serviceId)) {
+                    return res.status(400).json({
+                        error: "Invalid service ID format",
+                        message: `Service ID "${serviceId}" is not a valid ObjectId`
+                    });
+                }
+                
                 const service = await Service.findById(serviceId).select("title");
                 if (!service) {
                     return res.status(404).json({
@@ -538,28 +568,30 @@ const requestController ={
                 console.log("Resolved service title:", finalServiceTitle);
             }
             
-            // Handle ISO timestamp format (e.g., "2025-08-14T06:30:00:00.000Z")
+            // Standardize time inputs using timeUtils
+            let finalStartTime, finalEndTime, finalWorkDate;
+            
+            // Handle different input formats
             if (startTime && startTime.includes('T')) {
-                const startDate = new Date(startTime);
-                const endDate = new Date(endTime);
-                
-                // Extract date for workDate if not provided
-                if (!workDate) {
-                    finalWorkDate = startDate.toISOString().split('T')[0]; // YYYY-MM-DD format
-                }
-                
-                // Extract time in HH:mm format
-                finalStartTime = startDate.toTimeString().substring(0, 5); // HH:mm
-                finalEndTime = endDate.toTimeString().substring(0, 5); // HH:mm
-                
-                console.log("Converted times:", {
-                    originalStart: startTime,
-                    originalEnd: endTime,
-                    finalStartTime,
-                    finalEndTime,
-                    finalWorkDate
-                });
+                // ISO timestamp format
+                finalStartTime = timeUtils.extractTime(startTime);
+                finalEndTime = timeUtils.extractTime(endTime);
+                finalWorkDate = workDate || timeUtils.extractDate(startTime);
+            } else {
+                // Direct time format
+                finalStartTime = timeUtils.standardizeTime(startTime);
+                finalEndTime = timeUtils.standardizeTime(endTime);
+                finalWorkDate = timeUtils.standardizeDate(workDate);
             }
+            
+            console.log("Standardized inputs:", {
+                originalStart: startTime,
+                originalEnd: endTime,
+                originalWorkDate: workDate,
+                finalStartTime,
+                finalEndTime,
+                finalWorkDate
+            });
             
             // Validate required parameters
             if (!finalServiceTitle || !finalStartTime || !finalEndTime || !finalWorkDate) {
@@ -581,16 +613,25 @@ const requestController ={
                 });
             }
             
-            let cost = await calculateTotalCost(finalServiceTitle, finalStartTime, finalEndTime, finalWorkDate)
-            console.log("Calculated cost:", cost)
-            res.status(200).json(cost)
+            // Validate time range
+            if (!timeUtils.isValidTimeRange(finalStartTime, finalEndTime)) {
+                return res.status(400).json({
+                    error: "Invalid time range",
+                    message: "End time must be after start time"
+                });
+            }
+            
+            let cost = await calculateTotalCost(finalServiceTitle, finalStartTime, finalEndTime, finalWorkDate);
+            console.log("Calculated cost:", cost);
+            res.status(200).json(cost);
+            
         } catch (error) {
             console.error("Error calculating cost:", error);
             res.status(500).json({
                 error: "Internal server error",
                 message: "Không thể tính toán chi phí",
                 details: error.message
-            })
+            });
         }
     }
     
