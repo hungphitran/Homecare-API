@@ -21,9 +21,26 @@
   "phone": "0123456789",
   "password": "password123",
   "fullName": "Nguyễn Văn A",
-  "email": "nguyenvana@email.com"
+  "email": "nguyenvana@email.com",
+  "address": {
+    "province": "Hồ Chí Minh",
+    "district": "Quận 1",
+    "ward": "Phường Bến Nghé",
+    "detailAddress": "123 Đường Lê Lợi"
+  }
 }
 ```
+
+**Validation Rules:**
+- `phone`: Bắt buộc, số điện thoại duy nhất
+- `password`: Bắt buộc, tối thiểu 6 ký tự
+- `fullName`: Tùy chọn, tên đầy đủ của khách hàng
+- `email`: Tùy chọn, định dạng email hợp lệ
+- `address`: **Bắt buộc**, phải bao gồm đầy đủ 4 trường:
+  - `province`: Tỉnh/Thành phố (bắt buộc)
+  - `district`: Quận/Huyện (bắt buộc)
+  - `ward`: Phường/Xã (bắt buộc)
+  - `detailAddress`: Địa chỉ chi tiết (bắt buộc)
 
 **Response Body:**
 
@@ -43,7 +60,7 @@
 }
 ```
 
-*Lỗi (400):*
+*Lỗi (400) - Thiếu thông tin bắt buộc:*
 ```json
 {
   "error": "Missing required fields",
@@ -51,7 +68,15 @@
 }
 ```
 
-*Lỗi (409):*
+*Lỗi (400) - Thiếu địa chỉ:*
+```json
+{
+  "error": "Missing address information",
+  "message": "Vui lòng cung cấp đầy đủ thông tin địa chỉ (tỉnh/thành phố, quận/huyện, phường/xã, địa chỉ chi tiết)"
+}
+```
+
+*Lỗi (409) - Số điện thoại đã tồn tại:*
 ```json
 {
   "error": "Phone already exists",
@@ -615,6 +640,15 @@ Authorization: Bearer <access_token>
 5. **done**: Hoàn thành toàn bộ
 6. **cancelled**: Đã hủy
 
+### Yêu Cầu Địa Chỉ Bắt Buộc (Mới)
+Khi đăng ký customer, **bắt buộc** phải cung cấp địa chỉ đầy đủ bao gồm:
+- **province**: Tỉnh/Thành phố
+- **district**: Quận/Huyện  
+- **ward**: Phường/Xã
+- **detailAddress**: Địa chỉ chi tiết (số nhà, tên đường)
+
+Địa chỉ này sẽ được lưu vào mảng `addresses` của customer và có thể được sử dụng làm địa chỉ mặc định cho các đơn hàng.
+
 ### Format Thời Gian (Đã Chuẩn Hóa)
 API hiện tại hỗ trợ nhiều định dạng thời gian và tự động chuẩn hóa:
 
@@ -654,11 +688,11 @@ API hiện tại hỗ trợ nhiều định dạng thời gian và tự động 
 - **timeUtils.formatDateArray()**: Xử lý mảng ngày từ chuỗi
 
 ### Các Lỗi Thường Gặp
-- **400**: Thiếu dữ liệu bắt buộc hoặc định dạng thời gian không hợp lệ
+- **400**: Thiếu dữ liệu bắt buộc, thiếu địa chỉ, hoặc định dạng thời gian không hợp lệ
 - **401**: Token không hợp lệ hoặc hết hạn
 - **403**: Không có quyền truy cập
 - **404**: Không tìm thấy resource
-- **409**: Dữ liệu bị trùng lặp
+- **409**: Dữ liệu bị trùng lặp (số điện thoại đã tồn tại)
 - **500**: Lỗi server hoặc logic business
 
 ### Best Practices cho Time Format
@@ -667,6 +701,12 @@ API hiện tại hỗ trợ nhiều định dạng thời gian và tự động 
 3. **Luôn validate** time range trước khi submit
 4. **Kiểm tra timezone** khi làm việc với ISO format
 
+### Best Practices cho Address
+1. **Sử dụng dropdown/select** cho province, district, ward để đảm bảo tính nhất quán
+2. **Validate** địa chỉ chi tiết không được để trống
+3. **Cung cấp API location** để lấy danh sách province/district/ward
+4. **Lưu địa chỉ đầu tiên** làm địa chỉ mặc định cho customer
+
 ---
 
-*Tài liệu này được cập nhật ngày 03/08/2025*
+*Tài liệu này được cập nhật ngày 03/08/2025 - Thêm yêu cầu địa chỉ bắt buộc cho đăng ký customer*

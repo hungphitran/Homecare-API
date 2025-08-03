@@ -9,12 +9,20 @@ const authController = {
     // Đăng ký cho customer
     registerCustomer: async (req, res) => {
         try {
-            const { phone, password, fullName, email } = req.body;
+            const { phone, password, fullName, email, address } = req.body;
 
             if (!phone || !password) {
                 return res.status(400).json({
                     error: 'Missing required fields',
                     message: 'Vui lòng cung cấp số điện thoại và mật khẩu'
+                });
+            }
+
+            // Kiểm tra địa chỉ bắt buộc
+            if (!address || !address.province || !address.district || !address.ward || !address.detailAddress) {
+                return res.status(400).json({
+                    error: 'Missing address information',
+                    message: 'Vui lòng cung cấp đầy đủ thông tin địa chỉ (tỉnh/thành phố, quận/huyện, phường/xã, địa chỉ chi tiết)'
                 });
             }
 
@@ -31,13 +39,14 @@ const authController = {
             const saltRounds = 10;
             const hashedPassword = await bcrypt.hash(password, saltRounds);
 
-            // Tạo customer mới
+            // Tạo customer mới với địa chỉ bắt buộc
             const customer = new Customer({
                 phone,
                 password: hashedPassword,
                 fullName,
                 email,
-                signedUp: true
+                signedUp: true,
+                addresses: [address] // Thêm địa chỉ đầu tiên
             });
 
             await customer.save();
