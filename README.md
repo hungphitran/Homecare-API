@@ -30,6 +30,20 @@ Hệ thống API cho dịch vụ chăm sóc tại nhà với JWT Authentication,
 - 📅 **Quản lý lịch trình**: Theo dõi thời gian làm việc và nghỉ phép
 - 💬 **Hệ thống tin nhắn**: Giao tiếp giữa khách hàng và người giúp việc
 
+## 🆕 Cập Nhật Gần Đây (v2.1 - 04/08/2025)
+
+### 🔧 Cải Tiến Xử Lý Thời Gian
+- **✅ Fixed**: Xử lý chính xác local time format (`2025-08-06T06:30:00`)
+- **✨ Enhanced**: Timezone detection thông minh - phân biệt local time và timezone-aware time
+- **🚀 Improved**: Cross-midnight handling được cải thiện cho ca làm việc qua đêm
+- **🛡️ Secure**: Bảo tồn ý định thời gian của người dùng
+
+### Formats được hỗ trợ:
+- `"08:00"` - Time only (HH:mm)
+- `"2025-08-06T08:00:00"` - Local time (preserved exactly)
+- `"2025-08-06T08:00:00Z"` - UTC time
+- `"2025-08-06T08:00:00+07:00"` - Timezone aware
+
 ## 🛠 Công nghệ sử dụng
 
 - **Runtime**: Node.js (≥16.x)

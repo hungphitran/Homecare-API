@@ -44,10 +44,23 @@ const timeUtils = {
                 if (isNaN(date.getTime())) {
                     throw new Error('Invalid time');
                 }
-                // Use UTC hours and minutes to avoid timezone issues
-                const hours = date.getUTCHours().toString().padStart(2, '0');
-                const minutes = date.getUTCMinutes().toString().padStart(2, '0');
-                return `${hours}:${minutes}`;
+                
+                // Check if the input has timezone information
+                // Look for timezone indicators after the time part
+                const timePart = timeInput.split('T')[1] || '';
+                const hasTimezone = timePart.includes('Z') || timePart.includes('+') || timePart.includes('-');
+                
+                if (hasTimezone) {
+                    // Use UTC hours and minutes for timezone-aware inputs
+                    const hours = date.getUTCHours().toString().padStart(2, '0');
+                    const minutes = date.getUTCMinutes().toString().padStart(2, '0');
+                    return `${hours}:${minutes}`;
+                } else {
+                    // For local time inputs without timezone, use local hours to preserve the intended time
+                    const hours = date.getHours().toString().padStart(2, '0');
+                    const minutes = date.getMinutes().toString().padStart(2, '0');
+                    return `${hours}:${minutes}`;
+                }
             }
             
             // If it's a Date object
@@ -68,13 +81,13 @@ const timeUtils = {
      * Convert time string and date to full ISO datetime
      * @param {string} timeStr - Time in HH:mm format
      * @param {string} dateStr - Date in YYYY-MM-DD format
-     * @returns {Date} Full datetime object (UTC)
+     * @param {boolean} treatAsUtc - Whether to treat the time as UTC (true) or local time (false)
+     * @returns {Date} Full datetime object
      */
-    timeToDate: (timeStr, dateStr) => {
+    timeToDate: (timeStr, dateStr, treatAsUtc = true) => {
         if (!timeStr || !dateStr) return null;
         
         try {
-            // Create UTC datetime to avoid timezone issues
             const [hours, minutes] = timeStr.split(':').map(Number);
             const [year, month, day] = dateStr.split('-').map(Number);
             
@@ -82,7 +95,15 @@ const timeUtils = {
                 throw new Error('Invalid time values');
             }
             
-            const datetime = new Date(Date.UTC(year, month - 1, day, hours, minutes));
+            let datetime;
+            if (treatAsUtc) {
+                // Create UTC datetime - treat input time as UTC
+                datetime = new Date(Date.UTC(year, month - 1, day, hours, minutes));
+            } else {
+                // Create local datetime - input time is treated as local time
+                datetime = new Date(year, month - 1, day, hours, minutes);
+            }
+            
             if (isNaN(datetime.getTime())) {
                 throw new Error('Invalid datetime combination');
             }
@@ -106,6 +127,25 @@ const timeUtils = {
             if (isNaN(date.getTime())) {
                 throw new Error('Invalid date input');
             }
+            
+            // Check if input is a string with timezone information
+            if (typeof input === 'string' && input.includes('T')) {
+                // Look for timezone indicators after the time part
+                const timePart = input.split('T')[1] || '';
+                const hasTimezone = timePart.includes('Z') || timePart.includes('+') || timePart.includes('-');
+                
+                if (hasTimezone) {
+                    // For timezone-aware inputs, use ISO date
+                    return date.toISOString().split('T')[0];
+                } else {
+                    // For local time inputs, preserve the local date
+                    const year = date.getFullYear();
+                    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+                    const day = date.getDate().toString().padStart(2, '0');
+                    return `${year}-${month}-${day}`;
+                }
+            }
+            
             return date.toISOString().split('T')[0];
         } catch (error) {
             console.error('Error extracting date:', error);

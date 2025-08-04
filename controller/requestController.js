@@ -152,6 +152,12 @@ const requestController ={
                 req.body.customerInfo = JSON.parse(req.body.customerInfo);
             }
             
+            console.log("Original input times:", {
+                originalStartTime: req.body.startTime,
+                originalEndTime: req.body.endTime,
+                originalOrderDate: req.body.orderDate
+            });
+            
             // Standardize time inputs using timeUtils
             const standardizedStartTime = timeUtils.standardizeTime(req.body.startTime);
             const standardizedEndTime = timeUtils.standardizeTime(req.body.endTime);
@@ -179,11 +185,12 @@ const requestController ={
             
             const standardizedOrderDate = timeUtils.standardizeDate(orderDate) || timeUtils.standardizeDate(new Date());
             
+            // Extract individual dates for start and end times to handle cross-day scenarios
+            const extractedStartDate = req.body.startTime ? timeUtils.extractDate(req.body.startTime) : standardizedOrderDate;
+            const extractedEndDate = req.body.endTime ? timeUtils.extractDate(req.body.endTime) : standardizedOrderDate;
+            
             // Handle startDate - derive from startTime if not provided
-            let startDate = req.body.startDate;
-            if (!startDate && req.body.startTime) {
-                startDate = timeUtils.extractDate(req.body.startTime);
-            }
+            let startDate = req.body.startDate || extractedStartDate;
             
             // Format dates array
             const workingDates = timeUtils.formatDateArray(startDate);
@@ -195,13 +202,26 @@ const requestController ={
             req.body.customerInfo.usedPoint = 0;
 
             // Convert standardized times back to Date objects for database storage
-            const baseDate = standardizedOrderDate;
-            const startTimeObj = timeUtils.timeToDate(standardizedStartTime, baseDate);
-            const endTimeObj = timeUtils.timeToDate(standardizedEndTime, baseDate);
+            // For local time inputs (no timezone), treat the standardized time as UTC to preserve user intent
+            // For timezone-aware inputs, treat standardized time as UTC (since it's already converted)
+            const startHasTimezone = req.body.startTime && req.body.startTime.includes('T') && 
+                                   (req.body.startTime.split('T')[1] || '').match(/[Z\+\-]/);
+            const endHasTimezone = req.body.endTime && req.body.endTime.includes('T') && 
+                                 (req.body.endTime.split('T')[1] || '').match(/[Z\+\-]/);
+            
+            // Always treat standardized times as UTC to preserve the intended time values
+            const startTimeObj = timeUtils.timeToDate(standardizedStartTime, extractedStartDate, true);
+            const endTimeObj = timeUtils.timeToDate(standardizedEndTime, extractedEndDate, true);
             
             console.log("Standardized times:", {
+                originalStartTime: req.body.startTime,
+                originalEndTime: req.body.endTime,
                 startTime: standardizedStartTime,
                 endTime: standardizedEndTime,
+                extractedStartDate,
+                extractedEndDate,
+                startHasTimezone,
+                endHasTimezone,
                 startTimeObj,
                 endTimeObj,
                 orderDate: standardizedOrderDate,
@@ -343,16 +363,52 @@ const requestController ={
     ,
     // GET all request in database
     getAll: async (req,res,next)=>{
-        await Request.find()
-        .select('-__v -createdBy -updatedBy -deletedBy -deleted -profit -createdAt -updatedAt')
-        .then((data)=>res.status(200).json(data))
-        .catch((err)=> res.status(500).json(err))
+        try {
+            const requests = await Request.find()
+            .select('-__v -createdBy -updatedBy -deletedBy -deleted -profit -createdAt -updatedAt');
+            
+            // Lấy schedules từ RequestDetail cho mỗi request
+            const requestsWithSchedules = await Promise.all(
+                requests.map(async (request) => {
+                    const schedules = await RequestDetail.find({
+                        _id: { $in: request.scheduleIds }
+                    }).select('-__v -createdAt -updatedAt');
+                    
+                    return {
+                        ...request.toObject(),
+                        schedules: schedules
+                    };
+                })
+            );
+            
+            res.status(200).json(requestsWithSchedules);
+        } catch (err) {
+            res.status(500).json(err);
+        }
     },
     getByPhone: async (req,res,next)=>{
-        await Request.find({"customerInfo.phone":req.params.phone})
-        .select('-__v -createdBy -updatedBy -deletedBy -deleted -profit -createdAt -updatedAt')
-        .then((data)=>res.status(200).json(data))
-        .catch((err)=> res.status(500).json(err))
+        try {
+            const requests = await Request.find({"customerInfo.phone":req.params.phone})
+            .select('-__v -createdBy -updatedBy -deletedBy -deleted -profit -createdAt -updatedAt');
+            
+            // Lấy schedules từ RequestDetail cho mỗi request
+            const requestsWithSchedules = await Promise.all(
+                requests.map(async (request) => {
+                    const schedules = await RequestDetail.find({
+                        _id: { $in: request.scheduleIds }
+                    }).select('-__v -createdAt -updatedAt');
+                    
+                    return {
+                        ...request.toObject(),
+                        schedules: schedules
+                    };
+                })
+            );
+            
+            res.status(200).json(requestsWithSchedules);
+        } catch (err) {
+            res.status(500).json(err);
+        }
     },
 
     cancelRequest: async (req,res,next)=>{

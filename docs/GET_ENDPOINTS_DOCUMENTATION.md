@@ -317,7 +317,88 @@ Authorization: Bearer <access_token>
 
 ## Request Management Endpoints
 
-### 7. Lấy Request Theo Số Điện Thoại
+### 7. Lấy Tất Cả Request
+**Endpoint:** `GET /request/`
+
+**Mô tả:** Helper/Admin lấy danh sách tất cả request trong hệ thống
+
+**Headers:**
+```
+Authorization: Bearer <access_token>
+```
+
+**Quyền truy cập:** Chỉ Helper/Admin
+
+**Response Body:**
+
+*Thành công (200):*
+```json
+[
+  {
+    "_id": "507f1f77bcf86cd799439015",
+    "orderDate": "2025-08-04T00:00:00.000Z",
+    "requestType": "normal",
+    "scheduleIds": [
+      "507f1f77bcf86cd799439016",
+      "507f1f77bcf86cd799439017"
+    ],
+    "startTime": "2025-08-04T06:30:00.000Z",
+    "endTime": "2025-08-04T10:30:00.000Z",
+    "customerInfo": {
+      "phone": "0123456789",
+      "fullName": "Nguyễn Văn Nam",
+      "email": "nguyenvannam@email.com",
+      "address": "123 Đường Lê Lợi, Quận 1",
+      "usedPoint": 0
+    },
+    "service": {
+      "title": "Dọn dẹp nhà cửa",
+      "description": "Dịch vụ dọn dẹp nhà cửa chuyên nghiệp"
+    },
+    "location": {
+      "province": "Hồ Chí Minh",
+      "district": "Quận 1",
+      "ward": "Phường Bến Nghé"
+    },
+    "totalCost": 200000,
+    "status": "assigned",
+    "schedules": [
+      {
+        "_id": "507f1f77bcf86cd799439016",
+        "startTime": "2025-08-04T06:30:00.000Z",
+        "endTime": "2025-08-04T10:30:00.000Z",
+        "workingDate": "2025-08-04T00:00:00.000Z",
+        "helper_id": "HLP001",
+        "cost": 100000,
+        "helper_cost": 75000,
+        "status": "assigned"
+      },
+      {
+        "_id": "507f1f77bcf86cd799439017",
+        "startTime": "2025-08-05T06:30:00.000Z",
+        "endTime": "2025-08-05T10:30:00.000Z",
+        "workingDate": "2025-08-05T00:00:00.000Z",
+        "helper_id": "HLP001",
+        "cost": 100000,
+        "helper_cost": 75000,
+        "status": "notDone"
+      }
+    ]
+  }
+]
+```
+
+*Lỗi (403):*
+```json
+{
+  "error": "Access denied",
+  "message": "Không có quyền truy cập"
+}
+```
+
+---
+
+### 8. Lấy Request Theo Số Điện Thoại
 **Endpoint:** `GET /request/:phone`
 
 **Mô tả:** Customer lấy danh sách request của chính mình
@@ -362,7 +443,29 @@ Authorization: Bearer <access_token>
       "ward": "Phường Bến Nghé"
     },
     "totalCost": 200000,
-    "status": "assigned"
+    "status": "assigned",
+    "schedules": [
+      {
+        "_id": "507f1f77bcf86cd799439016",
+        "startTime": "2025-08-04T06:30:00.000Z",
+        "endTime": "2025-08-04T10:30:00.000Z",
+        "workingDate": "2025-08-04T00:00:00.000Z",
+        "helper_id": "HLP001",
+        "cost": 100000,
+        "helper_cost": 75000,
+        "status": "assigned"
+      },
+      {
+        "_id": "507f1f77bcf86cd799439017",
+        "startTime": "2025-08-05T06:30:00.000Z",
+        "endTime": "2025-08-05T10:30:00.000Z",
+        "workingDate": "2025-08-05T00:00:00.000Z",
+        "helper_id": "HLP001",
+        "cost": 100000,
+        "helper_cost": 75000,
+        "status": "notDone"
+      }
+    ]
   }
 ]
 ```
@@ -379,7 +482,7 @@ Authorization: Bearer <access_token>
 
 ## Request Detail Endpoints
 
-### 8. Lấy Request Detail Theo Helper ID
+### 9. Lấy Request Detail Theo Helper ID
 **Endpoint:** `GET /requestDetail/helper/:id`
 
 **Mô tả:** Helper lấy danh sách request detail được gán cho mình
@@ -432,7 +535,7 @@ Authorization: Bearer <access_token>
 
 ---
 
-### 9. Lấy Request Detail Theo IDs
+### 10. Lấy Request Detail Theo IDs
 **Endpoint:** `GET /requestDetail/?ids=id1,id2,id3`
 
 **Mô tả:** Lấy request details theo danh sách IDs
@@ -468,7 +571,7 @@ Authorization: Bearer <access_token>
 
 ## Location Endpoints
 
-### 10. Lấy Danh Sách Địa Điểm
+### 11. Lấy Danh Sách Địa Điểm
 **Endpoint:** `GET /location/`
 
 **Mô tả:** Lấy danh sách tỉnh thành, quận huyện, phường xã
@@ -530,7 +633,7 @@ Authorization: Bearer <access_token>
 
 ## Blog Endpoints
 
-### 11. Lấy Tất Cả Blog
+### 12. Lấy Tất Cả Blog
 **Endpoint:** `GET /blog/`
 
 **Mô tả:** Lấy danh sách tất cả blog đang hoạt động
@@ -567,7 +670,7 @@ Authorization: Bearer <access_token>
 
 ---
 
-### 12. Lấy Chi Tiết Blog
+### 13. Lấy Chi Tiết Blog
 **Endpoint:** `GET /blog/:id`
 
 **Mô tả:** Lấy thông tin chi tiết của một blog
@@ -600,7 +703,7 @@ Authorization: Bearer <access_token>
 
 ## General Settings Endpoints
 
-### 13. Lấy Cài Đặt Chung
+### 14. Lấy Cài Đặt Chung
 **Endpoint:** `GET /general/`
 
 **Mô tả:** Lấy các cài đặt chung của hệ thống
@@ -628,7 +731,7 @@ Authorization: Bearer <access_token>
 
 ## Policy Endpoints
 
-### 14. Lấy Tất Cả Chính Sách
+### 15. Lấy Tất Cả Chính Sách
 **Endpoint:** `GET /policy/`
 
 **Mô tả:** Lấy danh sách tất cả chính sách đang hoạt động
@@ -665,7 +768,7 @@ Authorization: Bearer <access_token>
 
 ## Question (FAQ) Endpoints
 
-### 15. Lấy Tất Cả Câu Hỏi Thường Gặp
+### 16. Lấy Tất Cả Câu Hỏi Thường Gặp
 **Endpoint:** `GET /question/`
 
 **Mô tả:** Lấy danh sách tất cả câu hỏi thường gặp
@@ -696,7 +799,7 @@ Authorization: Bearer <access_token>
 
 ## Discount Endpoints
 
-### 16. Lấy Tất Cả Khuyến Mãi
+### 17. Lấy Tất Cả Khuyến Mãi
 **Endpoint:** `GET /discount/`
 
 **Mô tả:** Lấy danh sách tất cả khuyến mãi đang hoạt động
@@ -751,7 +854,7 @@ Authorization: Bearer <access_token>
 
 ## Time Off Endpoints
 
-### 17. Lấy Danh Sách Ngày Nghỉ Của Helper
+### 18. Lấy Danh Sách Ngày Nghỉ Của Helper
 **Endpoint:** `GET /timeOff/:id`
 
 **Mô tả:** Helper lấy danh sách ngày nghỉ của chính mình
@@ -802,7 +905,7 @@ Authorization: Bearer <access_token>
 
 ## Cost Factor Endpoints
 
-### 18. Lấy Tất Cả Hệ Số Chi Phí
+### 19. Lấy Tất Cả Hệ Số Chi Phí
 **Endpoint:** `GET /costFactor/`
 
 **Mô tả:** Lấy tất cả hệ số chi phí đang hoạt động
@@ -859,7 +962,7 @@ Authorization: Bearer <access_token>
 
 ---
 
-### 19. Lấy Hệ Số Dịch Vụ
+### 20. Lấy Hệ Số Dịch Vụ
 **Endpoint:** `GET /costFactor/service`
 
 **Mô tả:** Lấy các hệ số áp dụng cho dịch vụ
@@ -896,7 +999,7 @@ Authorization: Bearer <access_token>
 
 ---
 
-### 20. Lấy Hệ Số Khác
+### 21. Lấy Hệ Số Khác
 **Endpoint:** `GET /costFactor/other`
 
 **Mô tả:** Lấy các hệ số khác (thời gian, ngày đặc biệt)

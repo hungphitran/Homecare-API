@@ -20,6 +20,9 @@ router.post('/cancel', authenticateToken, requireCustomer, requestController.can
 // Customer can get their own requests
 router.get('/:phone', authenticateToken, requireOwnership, requestController.getByPhone);
 
+// Admin/Helper can get all requests (thêm route mới)
+router.get('/', authenticateToken, requireHelper, requestController.getAll);
+
 // Customer can create requests
 router.post('/', authenticateToken, requireCustomer, requestController.create);
 

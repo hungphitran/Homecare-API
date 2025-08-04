@@ -649,43 +649,63 @@ Khi đăng ký customer, **bắt buộc** phải cung cấp địa chỉ đầy 
 
 Địa chỉ này sẽ được lưu vào mảng `addresses` của customer và có thể được sử dụng làm địa chỉ mặc định cho các đơn hàng.
 
-### Format Thời Gian (Đã Chuẩn Hóa)
-API hiện tại hỗ trợ nhiều định dạng thời gian và tự động chuẩn hóa:
+### Format Thời Gian (Đã Chuẩn Hóa - Cập Nhật Mới)
+API hiện tại hỗ trợ nhiều định dạng thời gian với xử lý timezone được cải thiện:
 
 #### Định dạng đầu vào được hỗ trợ:
 - **Time Only**: `"08:00"`, `"14:30"` (HH:mm format)
-- **ISO Format**: `"2025-08-04T08:00:00.000Z"`
+- **Local ISO Format**: `"2025-08-04T08:00:00"` (không có timezone)
+- **UTC ISO Format**: `"2025-08-04T08:00:00Z"` hoặc `"2025-08-04T08:00:00.000Z"`
+- **Timezone ISO Format**: `"2025-08-04T08:00:00+07:00"`
 - **Date Only**: `"2025-08-04"` (YYYY-MM-DD format)
 
-#### Xử lý tự động:
+#### Xử lý tự động được cải thiện:
+- **Local Time Preservation**: Thời gian local được giữ nguyên như ý định
+- **Timezone Detection**: Phân biệt chính xác giữa local time và timezone-aware time
+- **Cross-midnight Support**: Hỗ trợ ca làm việc qua đêm
 - **Validation**: Kiểm tra tính hợp lệ của thời gian
-- **Range Check**: Đảm bảo endTime > startTime
+- **Range Check**: Đảm bảo endTime > startTime (bao gồm cross-midnight)
 - **Auto Extract**: Tự động trích xuất date từ ISO timestamp
-- **Standardization**: Chuyển đổi về định dạng chuẩn cho database
+- **Smart Standardization**: Chuyển đổi thông minh dựa trên timezone info
 
 #### Ví dụ chuyển đổi:
 ```json
-// Input
+// Local time (không có timezone) - ĐƯỢC BẢO TỒN
 {
-  "startTime": "2025-08-04T08:00:00.000Z",
-  "endTime": "2025-08-04T12:00:00.000Z"
+  "startTime": "2025-08-04T08:00:00",
+  "endTime": "2025-08-04T12:00:00"
 }
+// → Giữ nguyên 08:00-12:00 theo giờ địa phương
 
-// Được chuẩn hóa thành
+// UTC time với Z
 {
-  "startTime": "08:00",
-  "endTime": "12:00",
-  "workDate": "2025-08-04"
+  "startTime": "2025-08-04T08:00:00Z",
+  "endTime": "2025-08-04T12:00:00Z"
 }
+// → Xử lý như UTC time
+
+// Timezone aware
+{
+  "startTime": "2025-08-04T08:00:00+07:00",
+  "endTime": "2025-08-04T12:00:00+07:00"
+}
+// → Xử lý với offset timezone
 ```
 
-### Tính Năng Mới Trong Time Utils
+### Tính Năng Mới Trong Time Utils (Cập Nhật)
 - **timeUtils.standardizeDate()**: Chuẩn hóa ngày về YYYY-MM-DD
-- **timeUtils.standardizeTime()**: Chuẩn hóa giờ về HH:mm
-- **timeUtils.isValidTimeRange()**: Kiểm tra khoảng thời gian hợp lệ
-- **timeUtils.extractDate()**: Trích xuất ngày từ datetime
+- **timeUtils.standardizeTime()**: Chuẩn hóa giờ về HH:mm với timezone detection
+- **timeUtils.isValidTimeRange()**: Kiểm tra khoảng thời gian hợp lệ (hỗ trợ cross-midnight)
+- **timeUtils.extractDate()**: Trích xuất ngày từ datetime (local/UTC aware)
 - **timeUtils.extractTime()**: Trích xuất giờ từ datetime
 - **timeUtils.formatDateArray()**: Xử lý mảng ngày từ chuỗi
+- **timeUtils.timeToDate()**: Chuyển đổi time + date thành Date object (local/UTC support)
+
+### Cải Tiến Mới Nhất (v2.1)
+- **🔧 Fixed**: Xử lý chính xác local time format (`2025-08-04T08:00:00`)
+- **✨ Enhanced**: Timezone detection thông minh hơn
+- **🚀 Improved**: Cross-midnight handling được cải thiện
+- **🛡️ Secure**: Bảo tồn ý định thời gian của người dùng
 
 ### Các Lỗi Thường Gặp
 - **400**: Thiếu dữ liệu bắt buộc, thiếu địa chỉ, hoặc định dạng thời gian không hợp lệ
@@ -697,9 +717,20 @@ API hiện tại hỗ trợ nhiều định dạng thời gian và tự động 
 
 ### Best Practices cho Time Format
 1. **Sử dụng HH:mm format** cho time input đơn giản
-2. **Sử dụng ISO format** khi cần timestamp đầy đủ
-3. **Luôn validate** time range trước khi submit
-4. **Kiểm tra timezone** khi làm việc với ISO format
+2. **Sử dụng ISO format không timezone** (`2025-08-04T08:00:00`) cho local time
+3. **Sử dụng ISO format với Z** (`2025-08-04T08:00:00Z`) cho UTC time
+4. **Sử dụng timezone offset** (`2025-08-04T08:00:00+07:00`) khi cần chính xác timezone
+5. **Luôn validate** time range trước khi submit
+6. **Cross-midnight shifts** được hỗ trợ tự động (23:30 → 01:30)
+
+### Ghi Chú Quan Trọng
+⚠️ **Thay đổi quan trọng**: Kể từ phiên bản mới, local time format (`2025-08-04T08:00:00`) sẽ được bảo tồn chính xác thay vì bị chuyển đổi timezone như trước đây.
+
+📝 **Chi tiết thay đổi:**
+- **Trước**: `2025-08-05T06:30:00` → Database: `2025-08-04T23:30:00.000Z` (timezone conversion)
+- **Sau**: `2025-08-05T06:30:00` → Database: `2025-08-05T06:30:00.000Z` (preserved as UTC)
+
+🎯 **Lợi ích**: Thời gian bạn nhập sẽ là thời gian được lưu chính xác, tránh nhầm lẫn do chuyển đổi timezone.
 
 ### Best Practices cho Address
 1. **Sử dụng dropdown/select** cho province, district, ward để đảm bảo tính nhất quán
