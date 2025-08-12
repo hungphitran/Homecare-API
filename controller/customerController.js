@@ -19,18 +19,27 @@ const customerController ={
             const { phone } = req.params;
             const updateData = { ...req.body };
 
-            // Validation: Không cho phép update các field quan trọng
-            const restrictedFields = ['phone', 'password', 'signedUp'];
-            restrictedFields.forEach(field => {
-                if (updateData[field] !== undefined) {
-                    delete updateData[field];
+            // Chỉ cho phép một số trường được cập nhật
+            const allowedFields = ['fullName', 'email', 'addresses'];
+            const sanitizedUpdate = {};
+            for (const key of allowedFields) {
+                if (Object.prototype.hasOwnProperty.call(updateData, key)) {
+                    sanitizedUpdate[key] = updateData[key];
                 }
-            });
+            }
+
+            // Nếu body không có trường hợp lệ nào
+            if (Object.keys(sanitizedUpdate).length === 0) {
+                return res.status(400).json({
+                    error: 'No valid fields',
+                    message: 'Chỉ được phép cập nhật các trường: fullName, email, addresses'
+                });
+            }
 
             // Validation email format nếu có
-            if (updateData.email && updateData.email.trim() !== '') {
+            if (sanitizedUpdate.email && sanitizedUpdate.email.trim() !== '') {
                 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-                if (!emailRegex.test(updateData.email)) {
+                if (!emailRegex.test(sanitizedUpdate.email)) {
                     return res.status(400).json({
                         error: 'Invalid email format',
                         message: 'Email không đúng định dạng'
@@ -39,11 +48,50 @@ const customerController ={
             }
 
             // Validation fullName
-            if (updateData.fullName && updateData.fullName.trim().length < 2) {
+            if (sanitizedUpdate.fullName && sanitizedUpdate.fullName.trim().length < 2) {
                 return res.status(400).json({
                     error: 'Invalid fullName',
                     message: 'Tên phải có ít nhất 2 ký tự'
                 });
+            }
+
+            // Validation addresses + chuẩn hóa theo yêu cầu: thay thế phần tử đầu tiên bằng địa chỉ mới
+            let newAddressToApply = null;
+            if (sanitizedUpdate.addresses !== undefined) {
+                const payload = sanitizedUpdate.addresses;
+                let addrObj = null;
+
+                if (Array.isArray(payload)) {
+                    // Nếu là mảng, chỉ lấy phần tử đầu tiên theo yêu cầu
+                    addrObj = payload[0];
+                } else if (payload && typeof payload === 'object') {
+                    addrObj = payload;
+                }
+
+                if (!addrObj || typeof addrObj !== 'object') {
+                    return res.status(400).json({
+                        error: 'Invalid addresses',
+                        message: 'addresses phải là object địa chỉ hợp lệ hoặc mảng chứa object đầu tiên'
+                    });
+                }
+
+                const requiredAddrFields = ['province', 'district', 'ward', 'detailAddress'];
+                for (const f of requiredAddrFields) {
+                    if (!addrObj[f] || typeof addrObj[f] !== 'string' || addrObj[f].trim() === '') {
+                        return res.status(400).json({
+                            error: 'Invalid address field',
+                            message: `Trường địa chỉ "${f}" là bắt buộc và phải là chuỗi không rỗng`
+                        });
+                    }
+                }
+
+                // Chuẩn hóa địa chỉ mới để áp dụng
+                newAddressToApply = {
+                    province: addrObj.province.trim(),
+                    district: addrObj.district.trim(),
+                    ward: addrObj.ward.trim(),
+                    detailAddress: addrObj.detailAddress.trim()
+                };
             }
 
             // Kiểm tra customer tồn tại
@@ -55,10 +103,21 @@ const customerController ={
                 });
             }
 
+            // Chuẩn bị dữ liệu update
+            const setData = { ...sanitizedUpdate };
+            if (newAddressToApply) {
+                // Lấy customer hiện tại để thay thế phần tử đầu trong addresses
+                const currentAddresses = Array.isArray(existingCustomer.addresses)
+                    ? existingCustomer.addresses
+                    : [];
+                const replaced = [newAddressToApply, ...currentAddresses.slice(1)];
+                setData.addresses = replaced;
+            }
+
             // Update customer
             const updatedCustomer = await Customer.findOneAndUpdate(
                 { phone },
-                { $set: updateData },
+                { $set: setData },
                 { new: true, runValidators: true }
             ).select('-password -__v -deleted -createdBy -updatedBy -deletedBy');
 

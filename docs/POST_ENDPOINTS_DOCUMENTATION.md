@@ -5,6 +5,7 @@
 2. [Request Management Endpoints](#request-management-endpoints)
 3. [Request Detail Endpoints](#request-detail-endpoints)
 4. [Cost Calculation Endpoints](#cost-calculation-endpoints)
+5. [Customer Account Endpoints](#customer-account-endpoints)
 
 ---
 
@@ -618,6 +619,99 @@ Authorization: Bearer <access_token>
 ```
 
 ---
+
+## Customer Account Endpoints
+
+### 15. Cập Nhật Thông Tin Customer
+**Endpoint:** `PATCH /customer/:phone`
+
+**Mô tả:** Customer cập nhật thông tin tài khoản của chính mình.
+
+**Headers:**
+```
+Authorization: Bearer <access_token>
+```
+
+**Parameters:**
+- `phone` (string): Số điện thoại của customer (phải trùng với tài khoản đăng nhập hiện tại)
+
+**Allowed fields:**
+- `fullName` (string, tối thiểu 2 ký tự)
+- `email` (string, định dạng email hợp lệ)
+- `addresses` (object hoặc array)
+
+**Quy tắc cập nhật địa chỉ:**
+- Nếu cung cấp `addresses` là object: API sẽ thay thế phần tử đầu tiên trong danh sách địa chỉ bằng object này.
+- Nếu cung cấp `addresses` là array: API chỉ dùng phần tử đầu tiên của mảng để thay thế phần tử đầu tiên hiện có.
+- Địa chỉ bắt buộc phải có đủ 4 trường: `province`, `district`, `ward`, `detailAddress` (chuỗi không rỗng).
+
+**Request Body (ví dụ - dùng object):**
+```json
+{
+  "fullName": "Nguyễn Văn Nam Updated",
+  "email": "newemail@example.com",
+  "addresses": {
+    "province": "Hồ Chí Minh",
+    "district": "Quận 2",
+    "ward": "Phường An Phú",
+    "detailAddress": "456 Đường Xa lộ Hà Nội"
+  }
+}
+```
+
+**Request Body (ví dụ - dùng array, chỉ lấy phần tử đầu):**
+```json
+{
+  "addresses": [
+    {
+      "province": "Hồ Chí Minh",
+      "district": "Quận 2",
+      "ward": "Phường An Phú",
+      "detailAddress": "456 Đường Xa lộ Hà Nội"
+    }
+  ]
+}
+```
+
+**Response Body:**
+
+*Thành công (200):*
+```json
+{
+  "message": "Cập nhật thông tin thành công",
+  "customer": {
+    "_id": "507f1f77bcf86cd799439014",
+    "fullName": "Nguyễn Văn Nam Updated",
+    "phone": "0123456789",
+    "email": "newemail@example.com",
+    "signedUp": true,
+    "addresses": [
+      {
+        "province": "Hồ Chí Minh",
+        "district": "Quận 2",
+        "ward": "Phường An Phú",
+        "detailAddress": "456 Đường Xa lộ Hà Nội"
+      }
+    ]
+  }
+}
+```
+
+*Lỗi (400) - Email không hợp lệ:*
+```json
+{
+  "error": "Invalid email format",
+  "message": "Email không đúng định dạng"
+}
+```
+
+*Lỗi (400) - Địa chỉ không hợp lệ:*
+```json
+{
+  "error": "Invalid address field",
+  "message": "Trường địa chỉ \"province\" là bắt buộc và phải là chuỗi không rỗng"
+}
+```
 
 ## Ghi Chú Quan Trọng
 

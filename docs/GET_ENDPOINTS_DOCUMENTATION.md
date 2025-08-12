@@ -249,6 +249,11 @@ Authorization: Bearer <access_token>
 
 **Mô tả:** Customer cập nhật thông tin của chính mình
 
+**Lưu ý cập nhật:**
+- Chỉ được phép cập nhật: `fullName`, `email`, `addresses`
+- Khi gửi `addresses`, API sẽ chỉ sử dụng địa chỉ đầu tiên để thay thế phần tử đầu trong danh sách địa chỉ hiện có
+- Địa chỉ cập nhật phải chứa đủ 4 trường bắt buộc: `province`, `district`, `ward`, `detailAddress`
+
 **Headers:**
 ```
 Authorization: Bearer <access_token>
@@ -257,21 +262,21 @@ Authorization: Bearer <access_token>
 **Parameters:**
 - `phone` (string): Số điện thoại của customer
 
-**Request Body:**
+**Request Body (ví dụ):**
 ```json
 {
   "fullName": "Nguyễn Văn Nam Updated",
   "email": "newemail@example.com",
-  "addresses": [
-    {
-      "province": "Hồ Chí Minh",
-      "district": "Quận 2",
-      "ward": "Phường An Phú",
-      "detailAddress": "456 Đường Xa lộ Hà Nội"
-    }
-  ]
+  "addresses": {
+    "province": "Hồ Chí Minh",
+    "district": "Quận 2",
+    "ward": "Phường An Phú",
+    "detailAddress": "456 Đường Xa lộ Hà Nội"
+  }
 }
 ```
+
+API cũng chấp nhận `addresses` là mảng, khi đó chỉ phần tử đầu tiên của mảng sẽ được sử dụng để thay thế địa chỉ đầu trong hồ sơ.
 
 **Response Body:**
 
@@ -310,6 +315,14 @@ Authorization: Bearer <access_token>
 {
   "error": "Invalid email format",
   "message": "Email không đúng định dạng"
+}
+```
+
+*Lỗi (400) - Địa chỉ không hợp lệ:*
+```json
+{
+  "error": "Invalid address field",
+  "message": "Trường địa chỉ \"province\" là bắt buộc và phải là chuỗi không rỗng"
 }
 ```
 
