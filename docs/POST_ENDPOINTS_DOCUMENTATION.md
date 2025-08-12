@@ -135,7 +135,7 @@
 **Request Body:**
 ```json
 {
-  "helper_id": "HLP001",
+  "phone": "0987654321",
   "password": "password123"
 }
 ```
@@ -150,9 +150,9 @@
   "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
   "user": {
     "id": "507f1f77bcf86cd799439011",
-    "helper_id": "HLP001",
+  "helper_id": "HLP001",
     "fullName": "Trần Thị B",
-    "phone": "0987654321",
+  "phone": "0987654321",
     "role": "helper"
   }
 }
@@ -626,6 +626,7 @@ Authorization: Bearer <access_token>
 - Access token có thời hạn 24 giờ
 - Refresh token có thời hạn 7 ngày
 - Sử dụng endpoint `/auth/refresh` để làm mới token
+ - Từ 12/08/2025: Đăng nhập Helper sử dụng SĐT (`phone`) thay cho `helper_id`; response vẫn trả về `helper_id` để dùng cho các nghiệp vụ khác
 
 ### Phân Quyền
 - **Customer**: Chỉ có thể thao tác với request của chính mình
@@ -740,4 +741,4 @@ API hiện tại hỗ trợ nhiều định dạng thời gian với xử lý ti
 
 ---
 
-*Tài liệu này được cập nhật ngày 03/08/2025 - Thêm yêu cầu địa chỉ bắt buộc cho đăng ký customer*
+*Tài liệu này được cập nhật ngày 12/08/2025 - Cập nhật đăng nhập Helper bằng SĐT; 03/08/2025 - Thêm yêu cầu địa chỉ bắt buộc cho đăng ký customer*

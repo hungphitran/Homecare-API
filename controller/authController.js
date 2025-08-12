@@ -152,24 +152,24 @@ const authController = {
         }
     },
 
-    // Đăng nhập cho helper bằng helper_id + password
+    // Đăng nhập cho helper bằng phone + password
     loginHelper: async (req, res) => {
         try {
-            const { helper_id, password } = req.body;
+        const { phone, password } = req.body;
 
-            if (!helper_id || !password) {
+        if (!phone || !password) {
                 return res.status(400).json({
                     error: 'Missing required fields',
-                    message: 'Vui lòng cung cấp helper ID và mật khẩu'
+            message: 'Vui lòng cung cấp số điện thoại và mật khẩu'
                 });
             }
 
             // Tìm helper
-            const helper = await Helper.findOne({ helper_id });
+        const helper = await Helper.findOne({ phone });
             if (!helper) {
                 return res.status(401).json({
                     error: 'Invalid credentials',
-                    message: 'Helper ID hoặc mật khẩu không đúng'
+            message: 'Số điện thoại hoặc mật khẩu không đúng'
                 });
             }
 
@@ -186,7 +186,7 @@ const authController = {
             if (!isPasswordValid) {
                 return res.status(401).json({
                     error: 'Invalid credentials',
-                    message: 'Helper ID hoặc mật khẩu không đúng'
+                    message: 'Số điện thoại hoặc mật khẩu không đúng'
                 });
             }
 
@@ -194,6 +194,7 @@ const authController = {
             const payload = {
                 id: helper._id,
                 helper_id: helper.helper_id,
+                phone: helper.phone,
                 role: 'helper'
             };
 
