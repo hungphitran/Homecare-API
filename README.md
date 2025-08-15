@@ -12,6 +12,7 @@ Hệ thống API cho dịch vụ chăm sóc tại nhà với JWT Authentication,
 - [Models](#models)
 - [Error Handling](#error-handling)
 - [Deployment](#deployment)
+- [Notifications Guide](docs/NOTIFICATIONS.md)
 
 ## 🏠 Giới thiệu
 
@@ -83,7 +84,7 @@ cp .env.example .env
 PORT=80
 
 # Database
-MONGODB_URI=your_mongodb_connection_string
+MONGO_URL=your_mongodb_connection_string
 
 # JWT
 JWT_SECRET=your_jwt_secret_key
@@ -91,6 +92,16 @@ JWT_REFRESH_SECRET=your_jwt_refresh_secret_key
 
 # Other configurations
 NODE_ENV=development
+
+# Firebase Admin (chọn 1 phương thức)
+# 1) Đường dẫn tới file service account JSON (máy dev)
+# GOOGLE_APPLICATION_CREDENTIALS=C:\\path\\to\\service-account.json
+
+# 2) Base64 của JSON service account (khuyên dùng khi deploy)
+# FIREBASE_SERVICE_ACCOUNT=BASE64_JSON_STRING
+
+# Tuỳ chọn: Topic mặc định để broadcast
+# DEFAULT_FCM_TOPIC=homecare-broadcast
 ```
 
 ### Chạy ứng dụng

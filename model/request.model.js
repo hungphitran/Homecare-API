@@ -35,8 +35,8 @@ const requestSchema = new mongoose.Schema({
         default: 0
     },
     status: {
-        type: String,
-        default: "notDone"
+    type: String,
+    default: "pending" // pending -> confirm -> completed (see docs/STATUS_FLOW.md)
     },
     location: {
         province: String,

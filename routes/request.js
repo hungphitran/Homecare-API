@@ -5,14 +5,14 @@ const { authenticateToken, requireHelper, requireCustomer, requireOwnership } = 
 // Public - calculate cost (không cần xác thực để estimate)
 router.post('/calculateCost', requestController.calculateCost);
 
-// Helper only - payment and work status management
+// Helper only - payment and work status management (confirm -> inProgress -> waitPayment -> completed)
 router.post('/finishpayment', authenticateToken, requireHelper, requestController.finishPayment)
 router.post('/finish', authenticateToken, requireHelper, requestController.finishRequest)
 router.post('/processing', authenticateToken, requireHelper, requestController.startWork)
 
 // Helper only - assignment and management
 router.post('/assign', authenticateToken, requireHelper, requestController.assign)
-router.post('/reject', authenticateToken, requireHelper, requestController.rejectHelper)
+// router.post('/reject', authenticateToken, requireHelper, requestController.rejectHelper)
 
 // Customer can cancel their own requests
 router.post('/cancel', authenticateToken, requireCustomer, requestController.cancelRequest)

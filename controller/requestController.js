@@ -9,14 +9,15 @@ const Helper = require('../model/helper.model')
 const dayjs = require('dayjs');
 const moment = require('moment');
 const timeUtils = require('../utils/timeUtils');
+const { notifyOrderStatusChange } = require('../utils/notifications');
 
 async function calculateCost(workDate,startTime, endTime, coefficient_service, coefficient_helper) {
     const generalSetting = await GeneralSetting.findOne({}).select("officeStartTime officeEndTime baseSalary");
     const coefficient_others = await CostFactor.findOne({}).select("coefficientList");
     const coefficient_OT = coefficient_others.coefficientList[0].value;
     const coefficient_weekend = coefficient_others.coefficientList[1].value;
-    // const coefficient_holiday = coefficient_others.coefficientList[2].value;
-    const coefficient_holiday = 1;
+    const coefficient_holiday = parseFloat(coefficient_others.coefficientList[2]?.value || 1);
+    const { isHoliday } = require('../utils/holidays');
 
     console.log("General Setting: ", generalSetting);
     const hoursDiff = Math.ceil(endTime.getUTCHours() - startTime.getUTCHours());
@@ -35,9 +36,10 @@ async function calculateCost(workDate,startTime, endTime, coefficient_service, c
 
     const dayOfWeek = dayjs(workDate).day();
     const isWeekend = (dayOfWeek === 0 || dayOfWeek === 6);
-    const applicableWeekendCoefficient = isWeekend ? coefficient_weekend : 1;
+    const holiday = isHoliday(workDate);
+    const applicableWeekendCoefficient = Math.max(isWeekend ? coefficient_weekend : 1, holiday ? coefficient_holiday : 1);
 
-    const totalCost = generalSetting.baseSalary * coefficient_service * coefficient_helper * ((coefficient_OT * OTTotalHour) + (coefficient_weekend * (hoursDiff - OTTotalHour)));
+    const totalCost = generalSetting.baseSalary * coefficient_service * coefficient_helper * ((coefficient_OT * OTTotalHour) + (applicableWeekendCoefficient * (hoursDiff - OTTotalHour)));
     return totalCost;
 }
 
@@ -70,6 +72,8 @@ async function calculateTotalCost (serviceTitle, startTime, endTime,workDate) {
     const HSDV = parseFloat(serviceFactor);
     const HSovertime = parseFloat(coefficient_other.coefficientList[0].value);
     const HScuoituan = parseFloat(coefficient_other.coefficientList[1].value); 
+    const HSle = parseFloat(coefficient_other.coefficientList[2]?.value || 1);
+    const { isHoliday } = require('../utils/holidays');
   
     let start = dayjs(moment(startTime, "HH:mm").toDate());
     let end = dayjs(moment(endTime, "HH:mm").toDate());
@@ -114,8 +118,10 @@ async function calculateTotalCost (serviceTitle, startTime, endTime,workDate) {
       
       T2 = Math.max(0, dailyHours - T1);
       
-      const isWeekend = (dayOfWeek === 0 || dayOfWeek === 6);
-        const applicableWeekendCoefficient = isWeekend ? HScuoituan : 1;
+    const isWeekend = (dayOfWeek === 0 || dayOfWeek === 6);
+    const holiday = isHoliday(workDate);
+    // On holidays, use holiday coefficient; if weekend+holiday both apply, use the higher
+    const applicableWeekendCoefficient = Math.max(isWeekend ? HScuoituan : 1, holiday ? HSle : 1);
       //console.log(applicableWeekendCoefficient);
       
       // Calculate cost based on your formula:
@@ -125,7 +131,7 @@ async function calculateTotalCost (serviceTitle, startTime, endTime,workDate) {
       const normalCost = applicableWeekendCoefficient * T2;
         console.log("normal",normalCost);
       console.log("basic and hsdv",basicCost,HSDV);
-      totalCost = (basicCost * HSDV * (overtimeCost + normalCost));
+    totalCost = (basicCost * HSDV * (overtimeCost + normalCost));
       console.log("total",totalCost);
     
         return {
@@ -135,6 +141,7 @@ async function calculateTotalCost (serviceTitle, startTime, endTime,workDate) {
             HSovertime: HSovertime,
             HScuoituan: HScuoituan,
             isWeekend: isWeekend,
+            isHoliday: holiday,
             totalOvertimeHours: T1,
             totalNormalHours: T2,
             applicableWeekendCoefficient: applicableWeekendCoefficient,
@@ -292,7 +299,7 @@ const requestController ={
                 helper_id: helperId || "notAvailable",
                 cost: cost || 0,
                 helper_cost: helperCost || 0,
-                status: "notDone"
+                status: "pending"
             });
             
             console.log("reqDetail", reqDetail);
@@ -320,7 +327,7 @@ const requestController ={
             location: location,
             profit: (req.body.totalCost - totalHelperCost) || 0,
             totalCost: req.body.totalCost,
-            status: "notDone"
+            status: "pending"
         });
         
         console.log("new order", newOrder);
@@ -351,14 +358,26 @@ const requestController ={
             .then(data=>data)
             .catch(err=>res.status(500).send(err))
 
-            schedule.status = "assigned";
+            schedule.status = "confirm";
             await schedule.save()
             .then(data=>console.log("Schedule updated successfully"))
         }
-        request.status = "assigned";
-        await request.save()
-        .then(()=>res.status(200).json("success"))
-        .catch((err)=> res.status(500).json(err))
+        const prevConfirm = request.status;
+        request.status = "confirm";
+        await request.save();
+        try {
+            if (prevConfirm !== request.status) {
+                const notificationResult = await notifyOrderStatusChange(request, request.status);
+                if (!notificationResult.success) {
+                    console.warn(`Failed to send notification for request ${request._id}:`, notificationResult.message);
+                } else {
+                    console.log(`Notification sent successfully for request ${request._id}: ${notificationResult.sent} sent, ${notificationResult.failed} failed`);
+                }
+            }
+        } catch (e) {
+            console.warn('Notify (confirm) failed:', e?.message || e);
+        }
+        return res.status(200).json("success");
     }
     ,
     // GET all request in database
@@ -367,21 +386,46 @@ const requestController ={
             const requests = await Request.find()
             .select('-__v -createdBy -updatedBy -deletedBy -deleted -profit -createdAt -updatedAt');
             
-            // Lấy schedules từ RequestDetail cho mỗi request
+            const currentTime = new Date();
+            const helperId = req.user.id || req.user.phone; // Lấy ID của helper hiện tại
+            
+            // Lấy schedules từ RequestDetail cho mỗi request với điều kiện lọc
             const requestsWithSchedules = await Promise.all(
                 requests.map(async (request) => {
-                    const schedules = await RequestDetail.find({
+                    const allSchedules = await RequestDetail.find({
                         _id: { $in: request.scheduleIds }
                     }).select('-__v -createdAt -updatedAt');
                     
+                    // Lọc schedules theo yêu cầu
+                    const filteredSchedules = allSchedules.filter(schedule => {
+                        // Điều kiện 1: Helper đã được gán vào requestDetail này
+                        if (schedule.helper_id === helperId) {
+                            return true;
+                        }
+                        
+                        // Điều kiện 2: RequestDetail chưa được gán helper và thời gian bắt đầu cách hiện tại 30p-1h
+                        if (!schedule.helper_id && schedule.startTime) {
+                            const timeDiffMinutes = (new Date(schedule.startTime) - currentTime) / (1000 * 60);
+                            // Chỉ hiển thị nếu thời gian bắt đầu cách hiện tại từ 30 phút đến 60 phút
+                            return timeDiffMinutes >= 30 && timeDiffMinutes <= 60;
+                        }
+                        
+                        return false;
+                    });
+                    
                     return {
                         ...request.toObject(),
-                        schedules: schedules
+                        schedules: filteredSchedules
                     };
                 })
             );
             
-            res.status(200).json(requestsWithSchedules);
+            // Chỉ trả về những request có ít nhất 1 schedule phù hợp
+            const validRequests = requestsWithSchedules.filter(request => 
+                request.schedules && request.schedules.length > 0
+            );
+            
+            res.status(200).json(validRequests);
         } catch (err) {
             res.status(500).json(err);
         }
@@ -424,30 +468,27 @@ const requestController ={
             });
         }
 
-        for(let scheduleId of request.scheduleIds){
-            await RequestDetail.findById(scheduleId)
-            .then(
-                async (schedule)=>{
-                if(schedule.status!="notDone"){
-                    res.status(500).json("cannot cancel this request")
-                }
-            })
-            .catch((err)=> res.status(500).json(err))
+        // Ensure all details are cancellable (pending or confirm)
+        const detailDocs = await RequestDetail.find({ _id: { $in: request.scheduleIds } });
+        if (!detailDocs.every(d => ["pending", "confirm"].includes(d.status))) {
+            return res.status(400).json("cannot cancel this request");
         }
-        for(let scheduleId of request.scheduleIds){
-            await RequestDetail.findOne(scheduleId)
-            .then(async (schedule)=>{
-                schedule.status="cancelled"
-                await schedule.save()
-                .then(()=>console.log("success"))
-                .catch((err)=> res.status(500).json(err))
-            })
-            .catch((err)=> res.status(500).json(err))
+        // Cancel all
+        for (const d of detailDocs) {
+            d.status = 'cancelled';
+            await d.save();
         }
+        const prevCancel = request.status;
         request.status="cancelled"
-        await request.save()
-        .then(()=>res.status(200).json("success"))
-        .catch((err)=> res.status(500).json(err))
+        await request.save();
+        try {
+            if (prevCancel !== request.status) {
+                await notifyOrderStatusChange(request, request.status);
+            }
+        } catch (e) {
+            console.warn('Notify (cancelled) failed:', e?.message || e);
+        }
+        return res.status(200).json("success")
 
     },
     assign: async (req,res,next)=>{
@@ -463,48 +504,44 @@ const requestController ={
                 return res.status(500).send(`Cannot find schedule with ID`);
             }
 
-            if (schedule.status === "notDone") {
-                schedule.status = "assigned";
+            if (schedule.status === "pending") {
+                schedule.status = "confirm";
                  await schedule.save();
             } else {
                 return res.status(500).send("Cannot change status of detail");
             }
         }
 
-        order.status = "assigned";
-        await order.save()
-        .then(()=>res.status(200).json("success"))
-        .catch((err)=> res.status(500).json(err))
+        const prevAssign = order.status;
+        order.status = "confirm";
+        await order.save();
+        try {
+            if (prevAssign !== order.status) {
+                await notifyOrderStatusChange(order, order.status);
+            }
+        } catch (e) {
+            console.warn('Notify (confirm) failed:', e?.message || e);
+        }
+        return res.status(200).json("success")
     },
+    
     startWork:  async (req,res,next)=>{
         let detailId = req.body.detailId;
         let detail = await RequestDetail.findOne({_id:detailId}) 
         .then(data=>data)
         .catch(err=>res.status(500).send(err))
 
-        let request  = await Request.findOne({scheduleIds : new mongoose.Types.ObjectId(detailId)}).populate("scheduleIds")
-        .then(data=>data)
-        .catch(err=>res.status(500).send(err))
-        console.log("request",request)
-        console.log("detail",detail)
-        if(detail){
-            request.status = "processing";
-            await request.save()
-            .then(()=>console.log("success"))
-            .catch(err => res.status(500).send(err))
-
-            if(detail.status=="assigned"){
-                detail.status ="processing";
-                await detail.save()
-                .then(data=>res.status(200) .send("success"))
-                .catch(err => res.status(500).send(err) )
-            }
-            else{
-                res.status(500).send("can not change status of detail") 
-            }
+        if(!detail){
+            return res.status(500).send("can not find detail");        
+        }
+        if(detail.status==="confirm"){
+            detail.status ="inProgress";
+            await detail.save()
+            .then(()=>res.status(200).send("success"))
+            .catch(err => res.status(500).send(err) )
         }
         else{
-            res.status(500).send("can not find detail")        
+            res.status(500).send("can not change status of detail") 
         }
     },
     finishRequest: async (req,res,next)=>{
@@ -517,25 +554,16 @@ const requestController ={
         // .then(data=>data)
         // .catch(err=>res.status(500).send(err))
 
-        if(detail){
-            if(detail.status=="processing"){
-                detail.status ="waitPayment";
-
-                // for(let scheduleId of request.scheduleIds){
-                //     let schedule = await RequestDetail.findOne({_id:scheduleId})
-                //     .then(data=>data)
-                //     .catch(err=>res.status(500).send(err))
-                // }
-                await detail.save()
-                .then(data=>res.status(200) .send("success"))
-                .catch(err => res.status(500).send(err))
-            }
-            else{
-                res.status(500).send("can not change status of detail") 
-            }
+        if(!detail){
+            return res.status(500).send("can not find detail");        
+        }
+        if(detail.status==="inProgress"){
+            detail.status ="waitPayment";
+            await detail.save().catch(err => res.status(500).send(err));
+            return res.status(200).send("success");
         }
         else{
-            res.status(500).send("can not find detail")        
+            res.status(500).send("can not change status of detail") 
         }
     },
     finishPayment: async (req,res,next)=>{
@@ -549,20 +577,21 @@ const requestController ={
                 return res.status(500).send("Cannot find detail");
             }
             else if(detail.status == "waitPayment") {
-                detail.status = "done";
-                for(let scheduleId of request.scheduleIds){
-                    let schedule = await RequestDetail.findOne({_id:scheduleId})
-                    .then(data=>data)
-                    .catch(err=>res.status(500).send(err))
-                    if(schedule.status!="done"){
-                        await detail.save();
-                        res.status(200).send("Success");
+                detail.status = "completed";
+                await detail.save();
+                // Check if all details completed
+                const details = await RequestDetail.find({ _id: { $in: request.scheduleIds } }).select('status');
+                const allCompleted = details.every(d => d.status === 'completed');
+                const prev = request.status;
+                request.status = allCompleted ? 'completed' : 'confirm';
+                await request.save();
+                try {
+                    if (prev !== request.status) {
+                        await notifyOrderStatusChange(request, request.status);
                     }
+                } catch (e) {
+                    console.warn('Notify (finishPayment) failed:', e?.message || e);
                 }
-                request.status = "done";
-                await request.save()
-                .then(()=>console.log("success"))
-                .catch(err => res.status(500).send(err))
                 return res.status(200).send("Success");
             }
             return res.status(500).send("Cannot change status of detail");
