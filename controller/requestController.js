@@ -11,143 +11,98 @@ const moment = require('moment');
 const timeUtils = require('../utils/timeUtils');
 const { notifyOrderStatusChange } = require('../utils/notifications');
 
-async function calculateCost(workDate,startTime, endTime, coefficient_service, coefficient_helper) {
-    const generalSetting = await GeneralSetting.findOne({}).select("officeStartTime officeEndTime baseSalary");
-    const coefficient_others = await CostFactor.findOne({}).select("coefficientList");
-    const coefficient_OT = coefficient_others.coefficientList[0].value;
-    const coefficient_weekend = coefficient_others.coefficientList[1].value;
-    const coefficient_holiday = parseFloat(coefficient_others.coefficientList[2]?.value || 1);
-    const { isHoliday } = require('../utils/holidays');
-
-    console.log("General Setting: ", generalSetting);
-    const hoursDiff = Math.ceil(endTime.getUTCHours() - startTime.getUTCHours());
-    const officeStartTime = moment(generalSetting.officeStartTime, "HH:mm").hours();
-    const officeEndTime = moment(generalSetting.officeEndTime, "HH:mm").hours();
-    const OTStartTime = officeStartTime - startTime.getUTCHours() >= 0 ? officeStartTime - startTime.getUTCHours() : 0;
-    const OTEndTime = endTime.getUTCHours() - officeEndTime >= 0 ? endTime.getUTCHours() - officeStartTime : 0;
-    const OTTotalHour = OTStartTime + OTEndTime;
-    console.log("OTStartTime: ", OTStartTime);
-    console.log("OTEndTime: ", OTEndTime); 
-    console.log("OTTotalHour: ", OTTotalHour);
-    console.log("hoursDiff: ", hoursDiff);
-    console.log("coefficient_service: ", coefficient_service);
-    console.log("coefficient_helper: ", coefficient_helper);
-    console.log("coefficient_OT: ", coefficient_OT);
-
-    const dayOfWeek = dayjs(workDate).day();
-    const isWeekend = (dayOfWeek === 0 || dayOfWeek === 6);
-    const holiday = isHoliday(workDate);
-    const applicableWeekendCoefficient = Math.max(isWeekend ? coefficient_weekend : 1, holiday ? coefficient_holiday : 1);
-
-    const totalCost = generalSetting.baseSalary * coefficient_service * coefficient_helper * ((coefficient_OT * OTTotalHour) + (applicableWeekendCoefficient * (hoursDiff - OTTotalHour)));
-    return totalCost;
-}
-
 async function calculateTotalCost (serviceTitle, startTime, endTime,workDate) {
-    if ( !startTime || !endTime || !workDate || !serviceTitle) {
-        console.log("Missing required parameters: startTime, endTime, workDate, serviceTitle");
+    if (!startTime || !endTime || !workDate || !serviceTitle) {
         return 0;
-    }  
+    }
 
     const generalSetting = await GeneralSetting.findOne({}).select("officeStartTime officeEndTime");
     let officeStartTime = generalSetting.officeStartTime;
     let officeEndTime = generalSetting.officeEndTime;
 
-    const service = await Service.findOne({title:serviceTitle}).select("coefficient_id basicPrice")
+    const service = await Service.findOne({ title: serviceTitle }).select("coefficient_id basicPrice");
     const servicePrice = service.basicPrice;
-    const serviceFactor = await CostFactor.findOne(
+    const serviceFactorData = await CostFactor.findOne(
         { applyTo: "service" },
-        { coefficientList: { $elemMatch: { _id: service.coefficient_id }}} )
-        .then(data=>{
-            console.log("serviceFactor",data)
-            return data.coefficientList[0].value;//get the coefficient of service
-        })
+        { coefficientList: { $elemMatch: { _id: service.coefficient_id } } }
+    );
+    const serviceFactor = serviceFactorData?.coefficientList[0]?.value || 1;
 
-    const coefficient_other = await CostFactor.findOne({applyTo:"other"}).select("coefficientList")
-
-    console.log("coefficient_other",coefficient_other)
-    console.log("serviceFactor",serviceFactor)
+    const coefficient_other = await CostFactor.findOne({ applyTo: "other" }).select("coefficientList");
 
     const basicCost = parseFloat(servicePrice);
     const HSDV = parseFloat(serviceFactor);
     const HSovertime = parseFloat(coefficient_other.coefficientList[0].value);
-    const HScuoituan = parseFloat(coefficient_other.coefficientList[1].value); 
+    const HScuoituan = parseFloat(coefficient_other.coefficientList[1].value);
     const HSle = parseFloat(coefficient_other.coefficientList[2]?.value || 1);
     const { isHoliday } = require('../utils/holidays');
-  
+
     let start = dayjs(moment(startTime, "HH:mm").toDate());
     let end = dayjs(moment(endTime, "HH:mm").toDate());
-  
+
     // Handle cross-midnight shifts
     if (end.isBefore(start)) {
         end = end.add(1, 'day');
     }
-  
-    officeStartTime = dayjs(moment(officeStartTime, "HH:mm").toDate(), "HH:mm");
-    officeEndTime = dayjs(moment(officeEndTime, "HH:mm").toDate(), "HH:mm");
-  
+
+    officeStartTime = dayjs(moment(officeStartTime, "HH:mm").toDate());
+    officeEndTime = dayjs(moment(officeEndTime, "HH:mm").toDate());
+
+    // Hiển thị thời gian bắt đầu/kết thúc so với giờ hành chính (sau khi khởi tạo biến)
+    const startVsOffice = start.diff(officeStartTime, "hour", true);
+    const endVsOffice = end.diff(officeEndTime, "hour", true);
+    console.log(`[Thời gian] Bắt đầu: ${start.format("HH:mm")}, Giờ hành chính: ${officeStartTime.format("HH:mm")}, Chênh lệch: ${startVsOffice} giờ`);
+    console.log(`[Thời gian] Kết thúc: ${end.format("HH:mm")}, Giờ hành chính: ${officeEndTime.format("HH:mm")}, Chênh lệch: ${endVsOffice} giờ`);
     let totalCost = 0;
 
-      const dayOfWeek = dayjs(workDate).day();
+    const dayOfWeek = dayjs(workDate).day();
+    const dailyHours = Math.abs(end.diff(start, "hour", true));
+    let T1 = 0;
+    let T2 = 0;
 
-      const dailyHours = Math.abs(end.diff(start, "hour", true));
+    console.log(`[Debug] Thời gian làm việc: ${start.format("HH:mm")} - ${end.format("HH:mm")}`);
+    console.log(`[Debug] Giờ hành chính: ${officeStartTime.format("HH:mm")} - ${officeEndTime.format("HH:mm")}`);
+    console.log(`[Debug] Tổng thời gian làm việc: ${dailyHours} giờ`);
 
-      
-      let T1 = 0; 
-      let T2 = 0; 
-      
-      // Handle cross-midnight calculation differently
-      if (start.isBefore(officeStartTime)) {
-        T1 += Math.abs(officeStartTime.diff(start, "hour", true));
-      }
-      
-      // For cross-midnight shifts, we need to handle end time carefully
-      let endForComparison = end;
-      if (end.date() > start.date()) {
-        // Cross-midnight case: compare with office end time of the same day as start
-        const officeEndTimeNextDay = officeEndTime.add(1, 'day');
-        if (end.isAfter(officeEndTimeNextDay)) {
-          T1 += Math.abs(end.diff(officeEndTimeNextDay, "hour", true));
-        }
-      } else {
-        // Same day case
-        if (end.isAfter(officeEndTime)) {
-          T1 += Math.abs(end.diff(officeEndTime, "hour", true));
-        }
-      }
-      
-      T2 = Math.max(0, dailyHours - T1);
-      
+    // Calculate overtime before office hours
+    if (start.isBefore(officeStartTime)) {
+        const otBeforeOffice = officeStartTime.diff(start, "hour", true);
+        T1 += otBeforeOffice;
+        console.log(`[OT] Thời gian OT trước giờ hành chính: ${otBeforeOffice} giờ`);
+    }
+
+    // Calculate overtime after office hours
+    if (end.isAfter(officeEndTime)) {
+        const otAfterOffice = end.diff(officeEndTime, "hour", true);
+        T1 += otAfterOffice;
+        console.log(`[OT] Thời gian OT sau giờ hành chính: ${otAfterOffice} giờ`);
+    }
+
+    T2 = Math.max(0, dailyHours - T1);
+    console.log(`[OT] Tổng thời gian OT (T1): ${T1} giờ, Thời gian thường (T2): ${T2} giờ`);
+
     const isWeekend = (dayOfWeek === 0 || dayOfWeek === 6);
     const holiday = isHoliday(workDate);
-    // On holidays, use holiday coefficient; if weekend+holiday both apply, use the higher
     const applicableWeekendCoefficient = Math.max(isWeekend ? HScuoituan : 1, holiday ? HSle : 1);
-      //console.log(applicableWeekendCoefficient);
-      
-      // Calculate cost based on your formula:
-      // cost = basicCost * HSDV * [(HSovertime * T1 * max(Hscuoituan, lễ)(if applicable)) + (max(Hscuoituan, lễ) * T2)]
-      const overtimeCost = HSovertime * T1 * applicableWeekendCoefficient;
-      console.log("overtime: ",overtimeCost);
-      const normalCost = applicableWeekendCoefficient * T2;
-        console.log("normal",normalCost);
-      console.log("basic and hsdv",basicCost,HSDV);
+
+    const overtimeCost = HSovertime * T1 * applicableWeekendCoefficient;
+    const normalCost = applicableWeekendCoefficient * T2;
     totalCost = (basicCost * HSDV * (overtimeCost + normalCost));
-      console.log("total",totalCost);
-    
-        return {
-            totalCost: totalCost,
-            servicePrice: basicCost,
-            HSDV: HSDV,
-            HSovertime: HSovertime,
-            HScuoituan: HScuoituan,
-            isWeekend: isWeekend,
-            isHoliday: holiday,
-            totalOvertimeHours: T1,
-            totalNormalHours: T2,
-            applicableWeekendCoefficient: applicableWeekendCoefficient,
-            overtimeCost: overtimeCost,
-            normalCost: normalCost
-        }
+
+    return {
+        totalCost: totalCost,
+        servicePrice: basicCost,
+        HSDV: HSDV,
+        HSovertime: HSovertime,
+        HScuoituan: HScuoituan,
+        isWeekend: isWeekend,
+        isHoliday: holiday,
+        totalOvertimeHours: T1,
+        totalNormalHours: T2,
+        applicableWeekendCoefficient: applicableWeekendCoefficient,
+        overtimeCost: overtimeCost,
+        normalCost: normalCost
+    }
   };
 
 const requestController ={
@@ -627,26 +582,27 @@ const requestController ={
 
     calculateCost: async (req, res, next) => {
         try {
-            console.log("Request body:", req.body);
+            // console.log("Request body:", req.body);
             const { serviceId, serviceTitle, startTime, endTime, workDate, location } = req.body;
             
             // Determine service title
             let finalServiceTitle = serviceTitle;
             if (serviceId && !serviceTitle) {
-                // Check if serviceId is a valid ObjectId format
+                // First try to find by ObjectId if it's valid
                 const mongoose = require('mongoose');
-                if (!mongoose.Types.ObjectId.isValid(serviceId)) {
-                    return res.status(400).json({
-                        error: "Invalid service ID format",
-                        message: `Service ID "${serviceId}" is not a valid ObjectId`
-                    });
+                let service;
+                
+                if (mongoose.Types.ObjectId.isValid(serviceId)) {
+                    service = await Service.findById(serviceId).select("title");
+                } else {
+                    // If not a valid ObjectId, try to find by title
+                    service = await Service.findOne({ title: serviceId }).select("title");
                 }
                 
-                const service = await Service.findById(serviceId).select("title");
                 if (!service) {
                     return res.status(404).json({
                         error: "Service not found",
-                        message: `Service with ID "${serviceId}" not found`
+                        message: `Service with ID/title "${serviceId}" not found`
                     });
                 }
                 finalServiceTitle = service.title;

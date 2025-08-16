@@ -51,9 +51,10 @@ const timeUtils = {
                 const hasTimezone = timePart.includes('Z') || timePart.includes('+') || timePart.includes('-');
                 
                 if (hasTimezone) {
-                    // Use UTC hours and minutes for timezone-aware inputs
-                    const hours = date.getUTCHours().toString().padStart(2, '0');
-                    const minutes = date.getUTCMinutes().toString().padStart(2, '0');
+                    // For timezone-aware inputs, convert to Vietnam time (UTC+7)
+                    const vietnamTime = new Date(date.getTime() + (7 * 60 * 60 * 1000));
+                    const hours = vietnamTime.getUTCHours().toString().padStart(2, '0');
+                    const minutes = vietnamTime.getUTCMinutes().toString().padStart(2, '0');
                     return `${hours}:${minutes}`;
                 } else {
                     // For local time inputs without timezone, use local hours to preserve the intended time
@@ -65,8 +66,10 @@ const timeUtils = {
             
             // If it's a Date object
             if (timeInput instanceof Date) {
-                const hours = timeInput.getUTCHours().toString().padStart(2, '0');
-                const minutes = timeInput.getUTCMinutes().toString().padStart(2, '0');
+                // Convert to Vietnam time (UTC+7)
+                const vietnamTime = new Date(timeInput.getTime() + (7 * 60 * 60 * 1000));
+                const hours = vietnamTime.getUTCHours().toString().padStart(2, '0');
+                const minutes = vietnamTime.getUTCMinutes().toString().padStart(2, '0');
                 return `${hours}:${minutes}`;
             }
             
@@ -166,10 +169,25 @@ const timeUtils = {
             if (isNaN(date.getTime())) {
                 throw new Error('Invalid time input');
             }
-            // Use UTC to avoid timezone issues
-            const hours = date.getUTCHours().toString().padStart(2, '0');
-            const minutes = date.getUTCMinutes().toString().padStart(2, '0');
-            return `${hours}:${minutes}`;
+            
+            // Check if input has timezone info (Z or +/-offset)
+            const inputStr = input.toString();
+            const hasTimezone = inputStr.includes('Z') || 
+                              inputStr.match(/[+-]\d{2}:\d{2}$/) || 
+                              inputStr.match(/[+-]\d{4}$/);
+            
+            if (hasTimezone) {
+                // For timezone-aware inputs, convert to Vietnam time (UTC+7)
+                const vietnamTime = new Date(date.getTime() + (7 * 60 * 60 * 1000));
+                const hours = vietnamTime.getUTCHours().toString().padStart(2, '0');
+                const minutes = vietnamTime.getUTCMinutes().toString().padStart(2, '0');
+                return `${hours}:${minutes}`;
+            } else {
+                // For local time inputs without timezone, use local hours
+                const hours = date.getHours().toString().padStart(2, '0');
+                const minutes = date.getMinutes().toString().padStart(2, '0');
+                return `${hours}:${minutes}`;
+            }
         } catch (error) {
             console.error('Error extracting time:', error);
             return null;
