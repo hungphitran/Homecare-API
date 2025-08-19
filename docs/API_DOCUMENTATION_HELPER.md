@@ -50,13 +50,13 @@
 
 ## 2. Request Management APIs (Quản lý đơn hàng)
 
-### 2.1 Lấy danh sách đơn hàng khả dụng
+### 2.1 Lấy danh sách đơn hàng khả dụng (chưa có helper)
 - **Endpoint**: `GET /request`
-- **Description**: Lấy danh sách đơn hàng mà helper có thể thực hiện
+- **Description**: Lấy danh sách đơn hàng chưa có helper nào được gán mà helper có thể nhận
 - **Authentication**: Bắt buộc (helper only)
 - **Logic**: Chỉ hiển thị các requestDetail mà:
-  - Helper đã được gán vào đơn đó, HOẶC
-  - RequestDetail chưa được gán helper và thời gian bắt đầu cách hiện tại 30 phút đến 1 tiếng
+  - Status = "pending" và helper_id = null (chưa có helper nào được gán)
+  - Thời gian bắt đầu cách hiện tại tối đa 2 giờ
 
 **Response Success (200):**
 ```json
@@ -90,24 +90,61 @@
 ]
 ```
 
-### 2.2 Nhận đơn hàng
+### 2.2 Lấy danh sách đơn hàng đã được gán cho helper
+- **Endpoint**: `GET /request/my-assigned`
+- **Description**: Lấy danh sách đơn hàng mà helper hiện tại đã được gán
+- **Authentication**: Bắt buộc (helper only)
+
+**Response Success (200):**
+```json
+[
+  {
+    "_id": "request_id",
+    "serviceTitle": "Dọn dẹp nhà cửa",
+    "serviceLocation": {
+      "address": "123 Đường ABC, TP.HCM",
+      "coordinates": [106.7, 10.8]
+    },
+    "customerInfo": {
+      "fullName": "Nguyễn Văn A",
+      "phone": "0901234567"
+    },
+    "totalCost": 450000,
+    "status": "pending",
+    "schedules": [
+      {
+        "_id": "schedule_id",
+        "workingDate": "2025-08-20T00:00:00.000Z",
+        "startTime": "2025-08-20T01:00:00.000Z",
+        "endTime": "2025-08-20T05:00:00.000Z",
+        "helper_id": "current_helper_id",
+        "cost": 250000,
+        "status": "assigned",
+        "helper_cost": 180000
+      }
+    ]
+  }
+]
+```
+
+### 2.3 Nhận đơn hàng
 - **Endpoint**: `POST /request/assign`
-- **Description**: Nhận (assign) một requestDetail vào tài khoản helper
+- **Description**: Nhận (assign) một requestDetail cụ thể vào tài khoản helper hiện tại (chỉ có thể assign requestDetail có thời gian bắt đầu trong vòng 2 giờ)
 - **Authentication**: Bắt buộc (helper only)
 
 **Request Body:**
 ```json
 {
-  "requestDetailId": "schedule_id"
+  "detailId": "requestDetail_id"
 }
 ```
 
 **Response Success (200):**
 ```json
 {
-  "message": "Đã nhận đơn hàng thành công",
+  "message": "Successfully assigned to requestDetail",
   "requestDetail": {
-    "_id": "schedule_id",
+    "_id": "requestDetail_id",
     "helper_id": "helper_id",
     "status": "assigned"
   }
@@ -122,7 +159,7 @@
 **Request Body:**
 ```json
 {
-  "requestDetailId": "schedule_id"
+  "detailId": "schedule_id"
 }
 ```
 
@@ -142,7 +179,7 @@
 **Request Body:**
 ```json
 {
-  "requestDetailId": "schedule_id",
+  "detailId": "schedule_id",
   "comment": {
     "review": "Đã hoàn thành tốt công việc",
     "loseThings": false,
@@ -167,7 +204,7 @@
 **Request Body:**
 ```json
 {
-  "requestDetailId": "schedule_id",
+  "detailId": "schedule_id",
   "paymentMethod": "cash"
 }
 ```
@@ -347,11 +384,12 @@ pending -> assign -> assigned -> processing -> inProgress -> finish -> waitPayme
 - **cancelled**: Đã hủy
 
 ### 3. Quy trình thực hiện:
-1. **Xem đơn khả dụng**: `GET /request`
-2. **Nhận đơn**: `POST /request/assign`
-3. **Bắt đầu làm việc**: `POST /request/processing`
-4. **Hoàn thành**: `POST /request/finish`
-5. **Xác nhận thanh toán**: `POST /request/finishpayment`
+1. **Xem đơn khả dụng**: `GET /request` - Chỉ hiển thị requestDetail chưa có helper và có thời gian bắt đầu trong vòng 2 giờ
+2. **Xem đơn đã nhận**: `GET /request/my-assigned` - Xem các requestDetail đã được gán cho helper hiện tại
+3. **Nhận đơn**: `POST /request/assign` - Gửi detailId để assign requestDetail cụ thể
+4. **Bắt đầu làm việc**: `POST /request/processing`
+5. **Hoàn thành**: `POST /request/finish`
+6. **Xác nhận thanh toán**: `POST /request/finishpayment`
 
 ## Error Responses
 
@@ -360,6 +398,14 @@ pending -> assign -> assigned -> processing -> inProgress -> finish -> waitPayme
 {
   "error": "Bad request",
   "message": "Dữ liệu gửi lên không hợp lệ"
+}
+```
+
+**Hoặc khi thời gian không hợp lệ:**
+```json
+{
+  "error": "Cannot assign: work time is not within 2 hours window",
+  "message": "Không thể nhận đơn: thời gian làm việc không nằm trong khung 2 giờ"
 }
 ```
 
@@ -429,7 +475,7 @@ curl -X POST http://localhost:3000/api/request/assign \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -d '{
-    "requestDetailId": "schedule_id"
+    "detailId": "schedule_id"
   }'
 ```
 
@@ -439,7 +485,7 @@ curl -X POST http://localhost:3000/api/request/processing \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -d '{
-    "requestDetailId": "schedule_id"
+    "detailId": "schedule_id"
   }'
 ```
 
@@ -449,7 +495,7 @@ curl -X POST http://localhost:3000/api/request/finish \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -d '{
-    "requestDetailId": "schedule_id",
+    "detailId": "schedule_id",
     "comment": {
       "review": "Đã hoàn thành tốt công việc",
       "loseThings": false,
@@ -464,7 +510,7 @@ curl -X POST http://localhost:3000/api/request/finishpayment \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -d '{
-    "requestDetailId": "schedule_id",
+    "detailId": "schedule_id",
     "paymentMethod": "cash"
   }'
 ```

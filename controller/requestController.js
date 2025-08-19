@@ -254,7 +254,7 @@ const requestController ={
                 startTime: startTimeObj,
                 endTime: endTimeObj,
                 workingDate: new Date(workingDate),
-                helper_id: helperId || "notAvailable",
+                helper_id: helperId || null, // Default to null when no helper assigned
                 cost: cost || 0,
                 helper_cost: helperCost || 0,
                 status: "pending"
@@ -320,18 +320,14 @@ const requestController ={
                         _id: { $in: request.scheduleIds }
                     }).select('-__v -createdAt -updatedAt');
                     
-                    // Lọc schedules theo yêu cầu
+                    // Lọc schedules theo yêu cầu: chỉ hiển thị những requestDetail chưa có helper nào được gán
                     const filteredSchedules = allSchedules.filter(schedule => {
-                        // Điều kiện 1: Helper đã được gán vào requestDetail này
-                        if (schedule.helper_id === helperId) {
-                            return true;
-                        }
-                        
-                        // Điều kiện 2: RequestDetail chưa được gán helper và thời gian bắt đầu cách hiện tại 30p-1h
-                        if (!schedule.helper_id && schedule.startTime) {
+                        // Chỉ hiển thị RequestDetail chưa được gán helper (status = pending, helper_id = null) 
+                        // và thời gian bắt đầu cách hiện tại <= 2h
+                        if (schedule.status === 'pending' && !schedule.helper_id && schedule.startTime) {
                             const timeDiffMinutes = (new Date(schedule.startTime) - currentTime) / (1000 * 60);
-                            // Chỉ hiển thị nếu thời gian bắt đầu cách hiện tại từ 30 phút đến 60 phút
-                            return timeDiffMinutes >= 30 && timeDiffMinutes <= 60;
+                            // Chỉ hiển thị nếu thời gian bắt đầu cách hiện tại tối đa 120 phút (2 giờ)
+                            return timeDiffMinutes >= 0 && timeDiffMinutes <= 120;
                         }
                         
                         return false;
@@ -354,6 +350,57 @@ const requestController ={
             res.status(500).json(err);
         }
     },
+    getMyAssignedRequests: async (req,res,next)=>{
+        try {
+            const helperId = req.user.id || req.user.phone; // Get helper ID from JWT token
+            
+            // Find all requestDetails assigned to this helper
+            const myRequestDetails = await RequestDetail.find({
+                helper_id: helperId
+            }).select('-__v -createdAt -updatedAt');
+
+            if (!myRequestDetails.length) {
+                return res.status(200).json([]);
+            }
+
+            // Get unique request IDs
+            const requestIds = [];
+            for (const detail of myRequestDetails) {
+                const request = await Request.findOne({ scheduleIds: detail._id });
+                if (request && !requestIds.some(id => id.equals(request._id))) {
+                    requestIds.push(request._id);
+                }
+            }
+
+            // Get full requests with all their schedules
+            const requests = await Request.find({
+                _id: { $in: requestIds }
+            }).select('-__v -createdBy -updatedBy -deletedBy -deleted -profit -createdAt -updatedAt');
+
+            const requestsWithSchedules = await Promise.all(
+                requests.map(async (request) => {
+                    const allSchedules = await RequestDetail.find({
+                        _id: { $in: request.scheduleIds }
+                    }).select('-__v -createdAt -updatedAt');
+                    
+                    // Only show schedules assigned to this helper
+                    const mySchedules = allSchedules.filter(schedule => 
+                        schedule.helper_id === helperId
+                    );
+                    
+                    return {
+                        ...request.toObject(),
+                        schedules: mySchedules
+                    };
+                })
+            );
+
+            res.status(200).json(requestsWithSchedules);
+        } catch (err) {
+            res.status(500).json(err);
+        }
+    },
+
     getByPhone: async (req,res,next)=>{
         try {
             const requests = await Request.find({"customerInfo.phone":req.params.phone})
@@ -416,39 +463,54 @@ const requestController ={
 
     },
     assign: async (req,res,next)=>{
-        let id = req.body.id;
-        let order = await Request.findOne({_id:id}) 
-        .then(data=>data)
-        .catch(err=>res.status(500).send(err))
-        let scheduleIds = order.scheduleIds;
-        console.log(scheduleIds)
-        for (let scheduleId of scheduleIds) {
-            let schedule = await RequestDetail.findOne({ _id: scheduleId });
-            if (!schedule) {
-                return res.status(500).send(`Cannot find schedule with ID`);
-            }
-
-            if (schedule.status === "pending") {
-                // Change status to assigned when helper is assigned
-                schedule.status = "assigned";
-                 await schedule.save();
-            } else {
-                return res.status(500).send("Cannot change status of detail");
-            }
-        }
-
-        const prevAssign = order.status;
-        // Skip confirm status - order stays pending until all work is completed
-        order.status = "pending";
-        await order.save();
+        let detailId = req.body.detailId; // Change to receive requestDetail ID
+        let helperId = req.user.id || req.user.phone; // Get helper ID from JWT token
+        
         try {
-            if (prevAssign !== order.status) {
-                await notifyOrderStatusChange(order, "assigned"); // Use 'assigned' notification type
+            let schedule = await RequestDetail.findOne({ _id: detailId });
+            if (!schedule) {
+                return res.status(500).send("Cannot find requestDetail");
             }
-        } catch (e) {
-            console.warn('Notify (assign) failed:', e?.message || e);
+
+            if (schedule.status !== "pending") {
+                return res.status(500).send("RequestDetail is not available for assignment");
+            }
+
+            // Check if the work time is within 2 hours from now
+            const currentTime = new Date();
+            const timeDiffMinutes = (new Date(schedule.startTime) - currentTime) / (1000 * 60);
+            if (timeDiffMinutes < 0 || timeDiffMinutes > 120) {
+                return res.status(400).send("Cannot assign: work time is not within 2 hours window");
+            }
+
+            // Assign helper to this specific requestDetail
+            schedule.status = "assigned";
+            schedule.helper_id = helperId;
+            await schedule.save();
+
+            // Find the parent request to send notification
+            let request = await Request.findOne({ scheduleIds: detailId });
+            if (request) {
+                try {
+                    // Always send notification when helper is assigned
+                    await notifyOrderStatusChange(request, "assigned");
+                } catch (e) {
+                    console.warn('Notify (assign) failed:', e?.message || e);
+                }
+            }
+
+            return res.status(200).json({
+                message: "Successfully assigned to requestDetail",
+                requestDetail: {
+                    _id: schedule._id,
+                    helper_id: schedule.helper_id,
+                    status: schedule.status
+                }
+            });
+        } catch (err) {
+            console.error(err);
+            return res.status(500).send(err.message || "An error occurred");
         }
-        return res.status(200).json("success")
     },
     
     startWork:  async (req,res,next)=>{
@@ -540,7 +602,7 @@ const requestController ={
                 let schedule = await RequestDetail.findOne({_id:scheduleId})
                 .then(data=>data)
                 .catch(err=>res.status(500).send(err))
-                schedule.helper_id = "notAvailable"
+                schedule.helper_id = null // Reset helper assignment
                 schedule.save()
                 .then(()=>console.log("Schedule updated successfully"))
                 .catch(err=>res.status(500).send(err))
