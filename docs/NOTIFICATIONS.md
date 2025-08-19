@@ -96,7 +96,7 @@ Base URL mặc định: `http://localhost` (port lấy từ `PORT` env, mặc đ
 ## 4) Đẩy thông báo tự động khi đổi trạng thái đơn hàng
 Hệ thống tự động gửi FCM đến tất cả thiết bị đã đăng ký (token gắn với `customerInfo.phone` của đơn) khi trạng thái đơn hàng thay đổi thực sự (chỉ gửi khi status trước khác status sau):
 
-- confirm/assign → `assigned`
+- assign → `assigned`
 - startWork → `processing`
 - finishRequest → `waitPayment`
 - finishPayment → `done`

@@ -73,7 +73,7 @@
       "phone": "0901234567"
     },
     "totalCost": 450000,
-    "status": "confirmed",
+    "status": "pending",
     "schedules": [
       {
         "_id": "schedule_id",
@@ -109,14 +109,14 @@
   "requestDetail": {
     "_id": "schedule_id",
     "helper_id": "helper_id",
-    "status": "confirmed"
+    "status": "assigned"
   }
 }
 ```
 
 ### 2.3 Bắt đầu làm việc
 - **Endpoint**: `POST /request/processing`
-- **Description**: Đánh dấu bắt đầu thực hiện công việc (chuyển trạng thái từ confirmed -> inProgress)
+- **Description**: Đánh dấu bắt đầu thực hiện công việc (chuyển trạng thái từ assigned -> inProgress)
 - **Authentication**: Bắt buộc (helper only)
 
 **Request Body:**
@@ -197,7 +197,7 @@
   "helper_id": "helper_id",
   "cost": 250000,
   "helper_cost": 180000,
-  "status": "confirmed",
+  "status": "pending",
   "comment": {
     "review": "",
     "loseThings": false,
@@ -335,12 +335,12 @@
 
 ### 1. Nhận và thực hiện đơn hàng:
 ```
-pending -> assign -> confirmed -> processing -> inProgress -> finish -> waitPayment -> finishpayment -> completed
+pending -> assign -> assigned -> processing -> inProgress -> finish -> waitPayment -> finishpayment -> completed
 ```
 
 ### 2. Các trạng thái chi tiết:
 - **pending**: RequestDetail chưa có helper
-- **confirmed**: Helper đã nhận đơn
+- **assigned**: Helper đã được gán cho RequestDetail
 - **inProgress**: Đang thực hiện công việc
 - **waitPayment**: Chờ thanh toán
 - **completed**: Hoàn tất

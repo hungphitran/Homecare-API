@@ -153,8 +153,8 @@ const NotificationHelper = require('../utils/notificationHelper');
 const notificationResult = await NotificationHelper.sendWithCheck(
     request.customerInfo.phone,
     'Cập nhật đơn hàng',
-    `Đơn ${request._id} đã được xác nhận`,
-    { orderId: request._id, status: 'confirm' }
+    `Đơn ${request._id} đã được phân công`,
+    { orderId: request._id, status: 'assigned' }
 );
 
 if (NotificationHelper.isSuccess(notificationResult)) {

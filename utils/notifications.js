@@ -82,8 +82,8 @@ async function sendToCustomerPhone(phone, title, body, data) {
 
 function statusLabel(status) {
   switch (status) {
-    case 'confirm':
-      return 'Đã xác nhận';
+    case 'assigned':
+      return 'Đã phân công';
     case 'inProgress':
       return 'Đang thực hiện';
     case 'waitPayment':

@@ -36,7 +36,7 @@ const requestSchema = new mongoose.Schema({
     },
     status: {
     type: String,
-    default: "pending" // pending -> confirm -> completed (see docs/STATUS_FLOW.md)
+    default: "pending" // pending -> completed (confirm status removed)
     },
     location: {
         province: String,

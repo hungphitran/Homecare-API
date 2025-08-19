@@ -300,44 +300,10 @@ const requestController ={
             });
         }
     },
-    confirm: async (req,res,next)=>{
-        let id = req.body.id;
-        let request = await Request.findOne({ _id: id })
-        .then(data=>data)
-        .catch(err=>res.status(500).send(err))
-
-        if(!request){
-            return res.status(500).send("Cannot find request");
-        }
-        let scheduleIds = request.scheduleIds;
-        console.log(scheduleIds)
-        for(let scheduleId of scheduleIds){
-            let schedule = await RequestDetail.findOne({_id:scheduleId})
-            .then(data=>data)
-            .catch(err=>res.status(500).send(err))
-
-            schedule.status = "confirm";
-            await schedule.save()
-            .then(data=>console.log("Schedule updated successfully"))
-        }
-        const prevConfirm = request.status;
-        request.status = "confirm";
-        await request.save();
-        try {
-            if (prevConfirm !== request.status) {
-                const notificationResult = await notifyOrderStatusChange(request, request.status);
-                if (!notificationResult.success) {
-                    console.warn(`Failed to send notification for request ${request._id}:`, notificationResult.message);
-                } else {
-                    console.log(`Notification sent successfully for request ${request._id}: ${notificationResult.sent} sent, ${notificationResult.failed} failed`);
-                }
-            }
-        } catch (e) {
-            console.warn('Notify (confirm) failed:', e?.message || e);
-        }
-        return res.status(200).json("success");
-    }
-    ,
+    // DEPRECATED: confirm method removed - status flow now skips confirm state
+    // assign method now handles the transition directly
+    
+    // GET all request in database
     // GET all request in database
     getAll: async (req,res,next)=>{
         try {
@@ -426,9 +392,9 @@ const requestController ={
             });
         }
 
-        // Ensure all details are cancellable (pending or confirm)
+        // Ensure all details are cancellable (pending or assigned status allowed)
         const detailDocs = await RequestDetail.find({ _id: { $in: request.scheduleIds } });
-        if (!detailDocs.every(d => ["pending", "confirm"].includes(d.status))) {
+        if (!detailDocs.every(d => ["pending", "assigned"].includes(d.status))) {
             return res.status(400).json("cannot cancel this request");
         }
         // Cancel all
@@ -463,7 +429,8 @@ const requestController ={
             }
 
             if (schedule.status === "pending") {
-                schedule.status = "confirm";
+                // Change status to assigned when helper is assigned
+                schedule.status = "assigned";
                  await schedule.save();
             } else {
                 return res.status(500).send("Cannot change status of detail");
@@ -471,14 +438,15 @@ const requestController ={
         }
 
         const prevAssign = order.status;
-        order.status = "confirm";
+        // Skip confirm status - order stays pending until all work is completed
+        order.status = "pending";
         await order.save();
         try {
             if (prevAssign !== order.status) {
-                await notifyOrderStatusChange(order, order.status);
+                await notifyOrderStatusChange(order, "assigned"); // Use 'assigned' notification type
             }
         } catch (e) {
-            console.warn('Notify (confirm) failed:', e?.message || e);
+            console.warn('Notify (assign) failed:', e?.message || e);
         }
         return res.status(200).json("success")
     },
@@ -492,7 +460,8 @@ const requestController ={
         if(!detail){
             return res.status(500).send("can not find detail");        
         }
-        if(detail.status==="confirm"){
+        // Updated to accept assigned status (after helper assignment)
+        if(detail.status==="assigned"){
             detail.status ="inProgress";
             await detail.save()
             .then(()=>res.status(200).send("success"))
@@ -541,7 +510,8 @@ const requestController ={
                 const details = await RequestDetail.find({ _id: { $in: request.scheduleIds } }).select('status');
                 const allCompleted = details.every(d => d.status === 'completed');
                 const prev = request.status;
-                request.status = allCompleted ? 'completed' : 'confirm';
+                // Skip confirm status - go directly to completed when all details are done
+                request.status = allCompleted ? 'completed' : 'pending';
                 await request.save();
                 try {
                     if (prev !== request.status) {
