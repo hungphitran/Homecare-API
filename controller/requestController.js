@@ -37,6 +37,7 @@ async function calculateTotalCost (serviceTitle, startTime, endTime,workDate) {
     const HSle = parseFloat(coefficient_other.coefficientList[2]?.value || 1);
     const { isHoliday } = require('../utils/holidays');
 
+    // startTime và endTime đã là UTC, không cần chuyển đổi
     let start = dayjs(moment(startTime, "HH:mm").toDate());
     let end = dayjs(moment(endTime, "HH:mm").toDate());
 
@@ -45,10 +46,11 @@ async function calculateTotalCost (serviceTitle, startTime, endTime,workDate) {
         end = end.add(1, 'day');
     }
 
+    // Chuyển đổi giờ hành chính thành dạng UTC (giữ nguyên giá trị thời gian)
     officeStartTime = dayjs(moment(officeStartTime, "HH:mm").toDate());
     officeEndTime = dayjs(moment(officeEndTime, "HH:mm").toDate());
 
-    // Hiển thị thời gian bắt đầu/kết thúc so với giờ hành chính (sau khi khởi tạo biến)
+    // Hiển thị thời gian bắt đầu/kết thúc so với giờ hành chính
     const startVsOffice = start.diff(officeStartTime, "hour", true);
     const endVsOffice = end.diff(officeEndTime, "hour", true);
     console.log(`[Thời gian] Bắt đầu: ${start.format("HH:mm")}, Giờ hành chính: ${officeStartTime.format("HH:mm")}, Chênh lệch: ${startVsOffice} giờ`);
@@ -90,7 +92,8 @@ async function calculateTotalCost (serviceTitle, startTime, endTime,workDate) {
     totalCost = (basicCost * HSDV * (overtimeCost + normalCost));
 
     return {
-        totalCost: totalCost,
+        // round to 2 decimal places
+        totalCost: parseFloat(totalCost.toFixed(2)),
         servicePrice: basicCost,
         HSDV: HSDV,
         HSovertime: HSovertime,
@@ -609,19 +612,23 @@ const requestController ={
                 console.log("Resolved service title:", finalServiceTitle);
             }
             
-            // Standardize time inputs using timeUtils
+            // Giữ nguyên thời gian UTC, không chuyển đổi
             let finalStartTime, finalEndTime, finalWorkDate;
             
-            // Handle different input formats
+            // Handle different input formats  
             if (startTime && startTime.includes('T')) {
-                // ISO timestamp format
-                finalStartTime = timeUtils.extractTime(startTime);
-                finalEndTime = timeUtils.extractTime(endTime);
+                // ISO timestamp format - giữ nguyên UTC time
+                const startUTC = new Date(startTime);
+                const endUTC = new Date(endTime);
+                finalStartTime = startUTC.getUTCHours().toString().padStart(2, '0') + ':' + 
+                               startUTC.getUTCMinutes().toString().padStart(2, '0');
+                finalEndTime = endUTC.getUTCHours().toString().padStart(2, '0') + ':' + 
+                             endUTC.getUTCMinutes().toString().padStart(2, '0');
                 finalWorkDate = workDate || timeUtils.extractDate(startTime);
             } else {
-                // Direct time format
-                finalStartTime = timeUtils.standardizeTime(startTime);
-                finalEndTime = timeUtils.standardizeTime(endTime);
+                // Direct time format - giữ nguyên
+                finalStartTime = startTime;
+                finalEndTime = endTime;
                 finalWorkDate = timeUtils.standardizeDate(workDate);
             }
             
