@@ -11,6 +11,72 @@ const moment = require('moment');
 const timeUtils = require('../utils/timeUtils');
 const { notifyOrderStatusChange } = require('../utils/notifications');
 
+/**
+ * IMPORTANT: All time calculations in this controller use UTC timezone
+ * - No timezone conversions are performed 
+ * - All database timestamps are stored in UTC
+ * - All time comparisons and calculations use UTC
+ * - This ensures consistency across different server timezones
+ */
+
+/**
+ * Helper function to fix inconsistent datetime data
+ * Ensures startTime and endTime use the same date as workingDate
+ * Also ensures workingDate is at midnight (00:00:00)
+ */
+function fixDateTimeConsistency(schedule) {
+    if (!schedule.startTime || !schedule.workingDate) {
+        return schedule;
+    }
+    
+    // Fix workingDate to be at midnight if it's not
+    const workingDate = new Date(schedule.workingDate);
+    const workingDateStr = workingDate.toISOString().split('T')[0]; // Get just the date part
+    const correctedWorkingDate = new Date(`${workingDateStr}T00:00:00.000Z`);
+    
+    const startTime = new Date(schedule.startTime);
+    const endTime = schedule.endTime ? new Date(schedule.endTime) : null;
+    
+    // Extract time components from original startTime and endTime
+    const startHours = startTime.getUTCHours().toString().padStart(2, '0');
+    const startMinutes = startTime.getUTCMinutes().toString().padStart(2, '0');
+    const startTimeStr = `${startHours}:${startMinutes}`;
+    
+    // Create corrected startTime with workingDate
+    const correctedStartTime = new Date(`${workingDateStr}T${startTimeStr}:00.000Z`);
+    
+    let correctedEndTime = null;
+    if (endTime) {
+        const endHours = endTime.getUTCHours().toString().padStart(2, '0');
+        const endMinutes = endTime.getUTCMinutes().toString().padStart(2, '0');
+        const endTimeStr = `${endHours}:${endMinutes}`;
+        correctedEndTime = new Date(`${workingDateStr}T${endTimeStr}:00.000Z`);
+    }
+    
+    const wasFixed = correctedStartTime.toISOString() !== schedule.startTime.toISOString() ||
+                    correctedWorkingDate.toISOString() !== schedule.workingDate.toISOString();
+    
+    if (wasFixed) {
+        console.log(`🔧 Fixed datetime consistency for schedule ${schedule._id}:`, {
+            original: {
+                startTime: schedule.startTime,
+                workingDate: schedule.workingDate
+            },
+            corrected: {
+                startTime: correctedStartTime.toISOString(),
+                workingDate: correctedWorkingDate.toISOString()
+            }
+        });
+    }
+    
+    return {
+        ...schedule,
+        startTime: correctedStartTime,
+        endTime: correctedEndTime,
+        workingDate: correctedWorkingDate
+    };
+}
+
 async function calculateTotalCost (serviceTitle, startTime, endTime,workDate) {
     if (!startTime || !endTime || !workDate || !serviceTitle) {
         return 0;
@@ -37,51 +103,52 @@ async function calculateTotalCost (serviceTitle, startTime, endTime,workDate) {
     const HSle = parseFloat(coefficient_other.coefficientList[2]?.value || 1);
     const { isHoliday } = require('../utils/holidays');
 
-    // startTime và endTime đã là UTC, không cần chuyển đổi
-    let start = dayjs(moment(startTime, "HH:mm").toDate());
-    let end = dayjs(moment(endTime, "HH:mm").toDate());
-
+    // Tất cả thời gian được xử lý theo UTC để đảm bảo tính nhất quán
+    // Tạo Date objects với UTC time để so sánh chính xác
+    const startUTC = moment.utc(`${workDate}T${startTime}:00`);
+    const endUTC = moment.utc(`${workDate}T${endTime}:00`);
+    
     // Handle cross-midnight shifts
-    if (end.isBefore(start)) {
-        end = end.add(1, 'day');
+    if (endUTC.isBefore(startUTC)) {
+        endUTC.add(1, 'day');
     }
 
-    // Chuyển đổi giờ hành chính thành dạng UTC (giữ nguyên giá trị thời gian)
-    officeStartTime = dayjs(moment(officeStartTime, "HH:mm").toDate());
-    officeEndTime = dayjs(moment(officeEndTime, "HH:mm").toDate());
+    // Chuyển đổi giờ hành chính sang UTC để so sánh
+    const officeStartUTC = moment.utc(`${workDate}T${officeStartTime}:00`);
+    const officeEndUTC = moment.utc(`${workDate}T${officeEndTime}:00`);
 
-    // Hiển thị thời gian bắt đầu/kết thúc so với giờ hành chính
-    const startVsOffice = start.diff(officeStartTime, "hour", true);
-    const endVsOffice = end.diff(officeEndTime, "hour", true);
-    console.log(`[Thời gian] Bắt đầu: ${start.format("HH:mm")}, Giờ hành chính: ${officeStartTime.format("HH:mm")}, Chênh lệch: ${startVsOffice} giờ`);
-    console.log(`[Thời gian] Kết thúc: ${end.format("HH:mm")}, Giờ hành chính: ${officeEndTime.format("HH:mm")}, Chênh lệch: ${endVsOffice} giờ`);
+    // Log thời gian UTC để debug (không chuyển đổi timezone)
+    console.log(`[UTC Time] Bắt đầu: ${startUTC.format("HH:mm")}, Giờ hành chính: ${officeStartUTC.format("HH:mm")}`);
+    console.log(`[UTC Time] Kết thúc: ${endUTC.format("HH:mm")}, Giờ hành chính: ${officeEndUTC.format("HH:mm")}`);
+    
     let totalCost = 0;
 
-    const dayOfWeek = dayjs(workDate).day();
-    const dailyHours = Math.abs(end.diff(start, "hour", true));
-    let T1 = 0;
-    let T2 = 0;
+    // Sử dụng UTC để tính toán ngày trong tuần (không chuyển đổi timezone)
+    const dayOfWeek = moment.utc(workDate).day();
+    const dailyHours = Math.abs(endUTC.diff(startUTC, "hour", true));
+    let T1 = 0; // Overtime hours
+    let T2 = 0; // Normal hours
 
-    console.log(`[Debug] Thời gian làm việc: ${start.format("HH:mm")} - ${end.format("HH:mm")}`);
-    console.log(`[Debug] Giờ hành chính: ${officeStartTime.format("HH:mm")} - ${officeEndTime.format("HH:mm")}`);
-    console.log(`[Debug] Tổng thời gian làm việc: ${dailyHours} giờ`);
+    console.log(`[Debug UTC] Thời gian làm việc: ${startUTC.format("HH:mm")} - ${endUTC.format("HH:mm")}`);
+    console.log(`[Debug UTC] Giờ hành chính: ${officeStartUTC.format("HH:mm")} - ${officeEndUTC.format("HH:mm")}`);
+    console.log(`[Debug UTC] Tổng thời gian làm việc: ${dailyHours} giờ`);
 
-    // Calculate overtime before office hours
-    if (start.isBefore(officeStartTime)) {
-        const otBeforeOffice = officeStartTime.diff(start, "hour", true);
+    // Calculate overtime before office hours (UTC)
+    if (startUTC.isBefore(officeStartUTC)) {
+        const otBeforeOffice = officeStartUTC.diff(startUTC, "hour", true);
         T1 += otBeforeOffice;
-        console.log(`[OT] Thời gian OT trước giờ hành chính: ${otBeforeOffice} giờ`);
+        console.log(`[OT UTC] Thời gian OT trước giờ hành chính: ${otBeforeOffice} giờ`);
     }
 
-    // Calculate overtime after office hours
-    if (end.isAfter(officeEndTime)) {
-        const otAfterOffice = end.diff(officeEndTime, "hour", true);
+    // Calculate overtime after office hours (UTC)
+    if (endUTC.isAfter(officeEndUTC)) {
+        const otAfterOffice = endUTC.diff(officeEndUTC, "hour", true);
         T1 += otAfterOffice;
-        console.log(`[OT] Thời gian OT sau giờ hành chính: ${otAfterOffice} giờ`);
+        console.log(`[OT UTC] Thời gian OT sau giờ hành chính: ${otAfterOffice} giờ`);
     }
 
     T2 = Math.max(0, dailyHours - T1);
-    console.log(`[OT] Tổng thời gian OT (T1): ${T1} giờ, Thời gian thường (T2): ${T2} giờ`);
+    console.log(`[OT UTC] Tổng thời gian OT (T1): ${T1} giờ, Thời gian thường (T2): ${T2} giờ`);
 
     const isWeekend = (dayOfWeek === 0 || dayOfWeek === 6);
     const holiday = isHoliday(workDate);
@@ -163,32 +230,28 @@ const requestController ={
                 // If no working dates provided, use the order date
                 workingDates.push(standardizedOrderDate);
             }
+            
+            console.log("Input dates processing:", {
+                originalStartTime: req.body.startTime,
+                originalEndTime: req.body.endTime,
+                originalOrderDate: req.body.orderDate,
+                originalStartDate: req.body.startDate,
+                extractedStartDate,
+                extractedEndDate,
+                standardizedOrderDate,
+                startDate,
+                workingDates
+            });
 
             req.body.customerInfo.usedPoint = 0;
 
-            // Convert standardized times back to Date objects for database storage
-            // For local time inputs (no timezone), treat the standardized time as UTC to preserve user intent
-            // For timezone-aware inputs, treat standardized time as UTC (since it's already converted)
-            const startHasTimezone = req.body.startTime && req.body.startTime.includes('T') && 
-                                   (req.body.startTime.split('T')[1] || '').match(/[Z\+\-]/);
-            const endHasTimezone = req.body.endTime && req.body.endTime.includes('T') && 
-                                 (req.body.endTime.split('T')[1] || '').match(/[Z\+\-]/);
-            
-            // Always treat standardized times as UTC to preserve the intended time values
-            const startTimeObj = timeUtils.timeToDate(standardizedStartTime, extractedStartDate, true);
-            const endTimeObj = timeUtils.timeToDate(standardizedEndTime, extractedEndDate, true);
-            
-            console.log("Standardized times:", {
+            console.log("Standardized UTC times:", {
                 originalStartTime: req.body.startTime,
                 originalEndTime: req.body.endTime,
-                startTime: standardizedStartTime,
-                endTime: standardizedEndTime,
+                standardizedStartTime,
+                standardizedEndTime,
                 extractedStartDate,
                 extractedEndDate,
-                startHasTimezone,
-                endHasTimezone,
-                startTimeObj,
-                endTimeObj,
                 orderDate: standardizedOrderDate,
                 workingDates
             });
@@ -242,6 +305,29 @@ const requestController ={
             let helperCost = 0;
             let cost = 0;
             
+            // Tạo startTimeObj và endTimeObj cho từng workingDate cụ thể
+            // Đảm bảo startTime và endTime được tạo với đúng workingDate để tránh sự không nhất quán
+            const startTimeObj = timeUtils.timeToDate(standardizedStartTime, workingDate, true);
+            const endTimeObj = timeUtils.timeToDate(standardizedEndTime, workingDate, true);
+            
+            // Validation: Đảm bảo startTime được tạo có cùng ngày với workingDate
+            if (startTimeObj) {
+                const startTimeDate = startTimeObj.toISOString().split('T')[0];
+                if (startTimeDate !== workingDate) {
+                    console.warn(`Date mismatch detected: workingDate=${workingDate}, startTimeDate=${startTimeDate}`);
+                }
+            }
+            
+            console.log(`Processing workingDate: ${workingDate}`, {
+                standardizedStartTime,
+                standardizedEndTime, 
+                workingDate,
+                startTimeObj_UTC: startTimeObj?.toISOString(),
+                endTimeObj_UTC: endTimeObj?.toISOString(),
+                workingDateForStorage: `${workingDate}T00:00:00.000Z`,
+                dateConsistencyCheck: startTimeObj ? startTimeObj.toISOString().split('T')[0] === workingDate : 'N/A'
+            });
+            
             // Calculate helper cost if helper is assigned
             if (helperId && coef_helper) {
                 try {
@@ -270,12 +356,44 @@ const requestController ={
             let reqDetail = new RequestDetail({
                 startTime: startTimeObj,
                 endTime: endTimeObj,
-                workingDate: new Date(workingDate),
-                helper_id: helperId || null, // Default to null when no helper assigned
+                workingDate: new Date(`${workingDate}T00:00:00.000Z`), // Ensure UTC date at midnight
+                helper_id: helperId || null,
                 cost: cost || 0,
                 helper_cost: helperCost || 0,
                 status: "pending"
             });
+            
+            // Validation: Ensure data consistency before saving
+            if (startTimeObj && reqDetail.workingDate) {
+                const startTimeDate = startTimeObj.toISOString().split('T')[0];
+                const workingDateStr = reqDetail.workingDate.toISOString().split('T')[0];
+                const workingDateHour = reqDetail.workingDate.toISOString().split('T')[1];
+                
+                if (startTimeDate !== workingDateStr) {
+                    console.error(`❌ Date mismatch in RequestDetail:`, {
+                        scheduleId: reqDetail._id,
+                        startTimeDate,
+                        workingDateStr,
+                        startTime: startTimeObj.toISOString(),
+                        workingDate: reqDetail.workingDate.toISOString()
+                    });
+                }
+                
+                if (workingDateHour !== '00:00:00.000Z') {
+                    console.error(`❌ WorkingDate should be at midnight:`, {
+                        scheduleId: reqDetail._id,
+                        workingDate: reqDetail.workingDate.toISOString(),
+                        expected: `${workingDateStr}T00:00:00.000Z`
+                    });
+                }
+                
+                console.log(`✅ RequestDetail validation:`, {
+                    scheduleId: reqDetail._id,
+                    startTime: startTimeObj.toISOString(),
+                    workingDate: reqDetail.workingDate.toISOString(),
+                    consistent: startTimeDate === workingDateStr && workingDateHour === '00:00:00.000Z'
+                });
+            }
             
             console.log("reqDetail", reqDetail);
             await reqDetail.save()
@@ -285,6 +403,11 @@ const requestController ={
         
         console.log("total helper cost", totalHelperCost, "total cost", req.body.totalCost);
         
+        // Tạo startTime và endTime cho main Request dựa trên workingDate đầu tiên
+        const firstWorkingDate = workingDates[0] || standardizedOrderDate;
+        const mainStartTimeObj = timeUtils.timeToDate(standardizedStartTime, firstWorkingDate, true);
+        const mainEndTimeObj = timeUtils.timeToDate(standardizedEndTime, firstWorkingDate, true);
+        
         let location = req.body.location || {  // handle location
             province: req.body.province,
             district: req.body.district,
@@ -292,11 +415,11 @@ const requestController ={
         };
 
         let newOrder = new Request({
-            orderDate: new Date(standardizedOrderDate),
+            orderDate: new Date(`${standardizedOrderDate}T00:00:00.000Z`), // Store as UTC date
             requestType: req.body.requestType,
             scheduleIds: scheduleIds,
-            startTime: startTimeObj,
-            endTime: endTimeObj,
+            startTime: mainStartTimeObj,
+            endTime: mainEndTimeObj,
             customerInfo: req.body.customerInfo,
             service: req.body.service,
             location: location,
@@ -320,15 +443,18 @@ const requestController ={
     // DEPRECATED: confirm method removed - status flow now skips confirm state
     // assign method now handles the transition directly
     
-    // GET all request in database
-    // GET all request in database
+    // GET all request in database (sử dụng UTC cho tất cả tính toán thời gian)
     getAll: async (req,res,next)=>{
+        console.log("Fetching all requests");
         try {
             const requests = await Request.find()
             .select('-__v -createdBy -updatedBy -deletedBy -deleted -profit -createdAt -updatedAt');
             
-            const currentTime = new Date();
+            let currentTime = new Date(); // Current UTC time
+            //add 7 hours to current time to match with Vietnam timezone
+            currentTime.setHours(currentTime.getHours() + 7);
             const helperId = req.user.id || req.user.phone; // Lấy ID của helper hiện tại
+
             
             // Lấy schedules từ RequestDetail cho mỗi request với điều kiện lọc
             const requestsWithSchedules = await Promise.all(
@@ -337,12 +463,24 @@ const requestController ={
                         _id: { $in: request.scheduleIds }
                     }).select('-__v -createdAt -updatedAt');
                     
+                    // console.log("All schedules for request:", request._id, allSchedules);
                     // Lọc schedules theo yêu cầu: chỉ hiển thị những requestDetail chưa có helper nào được gán
                     const filteredSchedules = allSchedules.filter(schedule => {
                         // Chỉ hiển thị RequestDetail chưa được gán helper (status = pending, helper_id = null) 
-                        // và thời gian bắt đầu cách hiện tại <= 2h
+                        // và thời gian bắt đầu cách hiện tại <= 2h (tính theo UTC)
+                        
                         if (schedule.status === 'pending' && !schedule.helper_id && schedule.startTime) {
-                            const timeDiffMinutes = (new Date(schedule.startTime) - currentTime) / (1000 * 60);
+                            console.log(`Processing schedule ${schedule.startTime}`);
+                            // Fix datetime consistency before E
+                            const correctedSchedule = fixDateTimeConsistency(schedule);
+                            const scheduleStartTime = new Date(correctedSchedule.startTime);
+                            console.log(`Schedule start time (UTC): ${scheduleStartTime.toISOString()}`);
+                            const timeDiffMinutes = (scheduleStartTime.getTime() - currentTime) / (1000 * 60);
+                            console.log(`Time difference in minutes: ${timeDiffMinutes} , current time: ${currentTime.toISOString()}`);
+                            // Update the schedule object with corrected values for response
+                            // schedule.startTime = correctedSchedule.startTime;
+                            // schedule.endTime = correctedSchedule.endTime;
+                            
                             // Chỉ hiển thị nếu thời gian bắt đầu cách hiện tại tối đa 120 phút (2 giờ)
                             return timeDiffMinutes >= 0 && timeDiffMinutes <= 120;
                         }
@@ -364,6 +502,8 @@ const requestController ={
             
             res.status(200).json(validRequests);
         } catch (err) {
+            console.error("Error fetching all requests:", err);
+
             res.status(500).json(err);
         }
     },
@@ -493,9 +633,9 @@ const requestController ={
                 return res.status(500).send("RequestDetail is not available for assignment");
             }
 
-            // Check if the work time is within 2 hours from now
-            const currentTime = new Date();
-            const timeDiffMinutes = (new Date(schedule.startTime) - currentTime) / (1000 * 60);
+            // Check if the work time is within 2 hours from now (UTC comparison)
+            const currentTime = new Date(); // Current UTC time
+            const timeDiffMinutes = (new Date(schedule.startTime).getTime() - currentTime.getTime()) / (1000 * 60);
             if (timeDiffMinutes < 0 || timeDiffMinutes > 120) {
                 return res.status(400).send("Cannot assign: work time is not within 2 hours window");
             }
@@ -661,12 +801,12 @@ const requestController ={
                 console.log("Resolved service title:", finalServiceTitle);
             }
             
-            // Giữ nguyên thời gian UTC, không chuyển đổi
+            // Sử dụng thời gian UTC một cách nhất quán
             let finalStartTime, finalEndTime, finalWorkDate;
             
             // Handle different input formats  
             if (startTime && startTime.includes('T')) {
-                // ISO timestamp format - giữ nguyên UTC time
+                // ISO timestamp format - sử dụng UTC time
                 const startUTC = new Date(startTime);
                 const endUTC = new Date(endTime);
                 finalStartTime = startUTC.getUTCHours().toString().padStart(2, '0') + ':' + 
@@ -675,13 +815,13 @@ const requestController ={
                              endUTC.getUTCMinutes().toString().padStart(2, '0');
                 finalWorkDate = workDate || timeUtils.extractDate(startTime);
             } else {
-                // Direct time format - giữ nguyên
+                // Direct time format - giả định đã là UTC
                 finalStartTime = startTime;
                 finalEndTime = endTime;
                 finalWorkDate = timeUtils.standardizeDate(workDate);
             }
             
-            console.log("Standardized inputs:", {
+            console.log("Standardized UTC inputs for cost calculation:", {
                 originalStart: startTime,
                 originalEnd: endTime,
                 originalWorkDate: workDate,
@@ -728,6 +868,93 @@ const requestController ={
                 error: "Internal server error",
                 message: "Không thể tính toán chi phí",
                 details: error.message
+            });
+        }
+    },
+
+    // Utility method to fix inconsistent datetime data in database
+    fixDateTimeInconsistencies: async (req, res, next) => {
+        try {
+            console.log("🔧 Starting datetime inconsistency fix...");
+            
+            // Find all RequestDetail records
+            const allSchedules = await RequestDetail.find({});
+            const fixedSchedules = [];
+            const issuesFound = [];
+            
+            for (const schedule of allSchedules) {
+                const original = {
+                    id: schedule._id.toString(),
+                    startTime: schedule.startTime?.toISOString(),
+                    endTime: schedule.endTime?.toISOString(), 
+                    workingDate: schedule.workingDate?.toISOString()
+                };
+                
+                // Check for issues
+                let hasIssues = false;
+                const issues = [];
+                
+                if (schedule.startTime && schedule.workingDate) {
+                    const startTimeDate = schedule.startTime.toISOString().split('T')[0];
+                    const workingDateStr = schedule.workingDate.toISOString().split('T')[0];
+                    const workingDateTime = schedule.workingDate.toISOString().split('T')[1];
+                    
+                    if (startTimeDate !== workingDateStr) {
+                        hasIssues = true;
+                        issues.push('date_mismatch');
+                    }
+                    
+                    if (workingDateTime !== '00:00:00.000Z') {
+                        hasIssues = true;
+                        issues.push('working_date_not_midnight');
+                    }
+                }
+                
+                if (hasIssues) {
+                    // Fix the schedule
+                    const corrected = fixDateTimeConsistency(schedule);
+                    
+                    // Update in database
+                    await RequestDetail.findByIdAndUpdate(schedule._id, {
+                        startTime: corrected.startTime,
+                        endTime: corrected.endTime,
+                        workingDate: corrected.workingDate
+                    });
+                    
+                    fixedSchedules.push({
+                        id: schedule._id.toString(),
+                        issues,
+                        original,
+                        corrected: {
+                            startTime: corrected.startTime.toISOString(),
+                            endTime: corrected.endTime?.toISOString(),
+                            workingDate: corrected.workingDate.toISOString()
+                        }
+                    });
+                    
+                    issuesFound.push(...issues);
+                }
+            }
+            
+            console.log(`🔧 Fixed ${fixedSchedules.length} schedules out of ${allSchedules.length} total`);
+            
+            res.status(200).json({
+                success: true,
+                message: `Fixed ${fixedSchedules.length} inconsistent records`,
+                summary: {
+                    totalRecords: allSchedules.length,
+                    fixedRecords: fixedSchedules.length,
+                    issueTypes: [...new Set(issuesFound)]
+                },
+                details: fixedSchedules
+            });
+            
+        } catch (error) {
+            console.error("Error fixing datetime inconsistencies:", error);
+            res.status(500).json({
+                success: false,
+                message: "Error fixing datetime inconsistencies",
+                error: error.message
             });
         }
     }
