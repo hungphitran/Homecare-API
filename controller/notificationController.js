@@ -1,6 +1,7 @@
 const { initFirebase } = require('../utils/firebase');
 const DeviceToken = require('../model/deviceToken.model');
 const NotificationHelper = require('../utils/notificationHelper');
+const { checkNotificationHealth } = require('../utils/notifications');
 
 // Ensure Firebase is initialized
 let admin;
@@ -190,6 +191,37 @@ const notificationController = {
     } catch (err) {
       console.error('checkTokenStatus error', err);
       return res.status(500).json({ success: false, message: err.message });
+    }
+  },
+
+  // Health check endpoint để kiểm tra trạng thái hệ thống notification
+  healthCheck: async (req, res) => {
+    try {
+      console.log('[NOTIFICATION CONTROLLER] Health check requested');
+      
+      const healthData = await checkNotificationHealth();
+      
+      const isHealthy = healthData.firebase && healthData.database;
+      
+      return res.status(isHealthy ? 200 : 503).json({
+        success: isHealthy,
+        message: isHealthy ? 'Notification system is healthy' : 'Notification system has issues',
+        timestamp: new Date().toISOString(),
+        health: healthData,
+        recommendations: isHealthy ? [] : [
+          !healthData.firebase && 'Check Firebase configuration (service account credentials)',
+          !healthData.database && 'Check database connection',
+          healthData.totalTokens === 0 && 'No device tokens registered yet'
+        ].filter(Boolean)
+      });
+      
+    } catch (err) {
+      console.error('healthCheck error', err);
+      return res.status(500).json({ 
+        success: false, 
+        message: 'Health check failed', 
+        error: err.message 
+      });
     }
   },
 };

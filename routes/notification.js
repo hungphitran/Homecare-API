@@ -11,5 +11,6 @@ router.post('/unsubscribe', notificationController.unsubscribe);
 // Test và kiểm tra notification
 router.post('/test', notificationController.testNotification);
 router.get('/check/:phone', notificationController.checkTokenStatus);
+router.get('/health', notificationController.healthCheck);
 
 module.exports = router;

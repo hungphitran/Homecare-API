@@ -523,7 +523,7 @@ const requestController ={
             // Get unique request IDs
             const requestIds = [];
             for (const detail of myRequestDetails) {
-                const request = await Request.findOne({ scheduleIds: detail._id });
+                const request = await Request.findOne({ scheduleIds: { $in: [detail._id] } });
                 if (request && !requestIds.some(id => id.equals(request._id))) {
                     requestIds.push(request._id);
                 }
@@ -633,11 +633,30 @@ const requestController ={
                 return res.status(500).send("RequestDetail is not available for assignment");
             }
 
-            // Check if the work time is within 2 hours from now (UTC comparison)
-            const currentTime = new Date(); // Current UTC time
-            const timeDiffMinutes = (new Date(schedule.startTime).getTime() - currentTime.getTime()) / (1000 * 60);
+            // Check if the work time is within 2 hours from now 
+            // Add 7 hours to current time to match Vietnam timezone (as done in getAll method)
+            const currentTime = new Date();
+            currentTime.setHours(currentTime.getHours() + 7);
+            
+            const scheduleStartTime = new Date(schedule.startTime);
+            const timeDiffMinutes = (scheduleStartTime.getTime() - currentTime.getTime()) / (1000 * 60);
+            
+            console.log(`[ASSIGN DEBUG] Current time (VN): ${currentTime.toISOString()}`);
+            console.log(`[ASSIGN DEBUG] Schedule start time: ${scheduleStartTime.toISOString()}`);
+            console.log(`[ASSIGN DEBUG] Time difference: ${timeDiffMinutes} minutes`);
+            
+            // Allow assignment if work time is between now and 2 hours from now
             if (timeDiffMinutes < 0 || timeDiffMinutes > 120) {
-                return res.status(400).send("Cannot assign: work time is not within 2 hours window");
+                return res.status(400).json({
+                    success: false,
+                    message: "Cannot assign: work time is not within 2 hours window",
+                    debug: {
+                        currentTime: currentTime.toISOString(),
+                        scheduleStartTime: scheduleStartTime.toISOString(),
+                        timeDiffMinutes: timeDiffMinutes,
+                        withinWindow: timeDiffMinutes >= 0 && timeDiffMinutes <= 120
+                    }
+                });
             }
 
             // Assign helper to this specific requestDetail
@@ -645,27 +664,115 @@ const requestController ={
             schedule.helper_id = helperId;
             await schedule.save();
 
+            console.log(`[ASSIGN] ✅ Successfully assigned helper ${helperId} to schedule ${detailId}`);
+
             // Find the parent request to send notification
-            let request = await Request.findOne({ scheduleIds: detailId });
-            if (request) {
+            console.log(`[ASSIGN] 🔍 Looking for parent request with scheduleId: ${detailId}`);
+            let request = await Request.findOne({ scheduleIds: { $in: [detailId] } });
+            
+            if (!request) {
+                console.error(`[ASSIGN] ❌ Could not find parent request for scheduleId: ${detailId}`);
+                console.error(`[ASSIGN] 🔍 Debugging - Let's check what requests exist:`);
+                
+                // Debug: Find all requests and log their scheduleIds
+                const allRequests = await Request.find({}).select('_id scheduleIds customerInfo.phone');
+                console.error(`[ASSIGN] Found ${allRequests.length} total requests in database:`);
+                
+                allRequests.forEach((req, index) => {
+                    console.error(`  Request ${index + 1}: ${req._id}`);
+                    console.error(`    - ScheduleIds: [${req.scheduleIds.join(', ')}]`);
+                    console.error(`    - Phone: ${req.customerInfo?.phone}`);
+                    console.error(`    - Contains target schedule? ${req.scheduleIds.some(id => id.toString() === detailId.toString())}`);
+                });
+                
+                // Try alternative search using ObjectId conversion
                 try {
-                    // Always send notification when helper is assigned
-                    await notifyOrderStatusChange(request, "assigned");
-                } catch (e) {
-                    console.warn('Notify (assign) failed:', e?.message || e);
+                    const mongoose = require('mongoose');
+                    const objectIdDetailId = new mongoose.Types.ObjectId(detailId);
+                    const requestWithObjectId = await Request.findOne({ scheduleIds: { $in: [objectIdDetailId] } });
+                    
+                    if (requestWithObjectId) {
+                        console.log(`[ASSIGN] ✅ Found parent request using ObjectId conversion: ${requestWithObjectId._id}`);
+                        request = requestWithObjectId;
+                    }
+                } catch (objIdError) {
+                    console.error(`[ASSIGN] ObjectId conversion failed:`, objIdError.message);
+                }
+                
+                if (!request) {
+                    return res.status(200).json({
+                        message: "Successfully assigned to requestDetail, but could not find parent request for notification",
+                        requestDetail: {
+                            _id: schedule._id,
+                            helper_id: schedule.helper_id,
+                            status: schedule.status
+                        },
+                        warning: "Notification not sent - parent request not found",
+                        debug: {
+                            searchedScheduleId: detailId,
+                            totalRequestsInDb: allRequests.length,
+                            requestsWithSchedules: allRequests.map(r => ({
+                                requestId: r._id,
+                                scheduleCount: r.scheduleIds.length,
+                                scheduleIds: r.scheduleIds
+                            }))
+                        }
+                    });
                 }
             }
-
-            return res.status(200).json({
-                message: "Successfully assigned to requestDetail",
-                requestDetail: {
-                    _id: schedule._id,
-                    helper_id: schedule.helper_id,
-                    status: schedule.status
-                }
+            
+            console.log(`[ASSIGN] ✅ Found parent request: ${request._id}`);
+            console.log(`[ASSIGN] 📋 Request details:`, {
+                orderId: request._id,
+                customerPhone: request.customerInfo?.phone,
+                status: request.status,
+                scheduleIds: request.scheduleIds
             });
+
+            try {
+                console.log(`[ASSIGN] 📤 Sending notification for status change to "assigned"...`);
+                const notificationResult = await notifyOrderStatusChange(request, "assigned");
+                
+                if (notificationResult.success) {
+                    console.log(`[ASSIGN] ✅ Notification sent successfully`);
+                } else {
+                    console.error(`[ASSIGN] ❌ Notification failed:`, notificationResult.message);
+                }
+                
+                return res.status(200).json({
+                    message: "Successfully assigned to requestDetail",
+                    requestDetail: {
+                        _id: schedule._id,
+                        helper_id: schedule.helper_id,
+                        status: schedule.status
+                    },
+                    notification: {
+                        sent: notificationResult.success,
+                        message: notificationResult.message,
+                        details: notificationResult
+                    }
+                });
+                
+            } catch (e) {
+                console.error('[ASSIGN] 💥 Exception during notification:', e);
+                console.error('[ASSIGN] Stack trace:', e.stack);
+                
+                return res.status(200).json({
+                    message: "Successfully assigned to requestDetail, but notification failed",
+                    requestDetail: {
+                        _id: schedule._id,
+                        helper_id: schedule.helper_id,
+                        status: schedule.status
+                    },
+                    notification: {
+                        sent: false,
+                        error: e.message,
+                        details: e.stack
+                    }
+                });
+            }
         } catch (err) {
-            console.error(err);
+            console.error('[ASSIGN] 💥 Outer catch block - unexpected error:', err);
             return res.status(500).send(err.message || "An error occurred");
         }
     },
@@ -716,7 +823,7 @@ const requestController ={
         try {
             let detailId = req.body.detailId;
             let detail = await RequestDetail.findOne({ _id: detailId }).then(data => data)
-            let request  = await Request.findOne({scheduleIds : new mongoose.Types.ObjectId(detailId)}).populate("scheduleIds")
+            let request = await Request.findOne({ scheduleIds: { $in: [detailId] } }).populate("scheduleIds")
             .then(data=>data)
             .catch(err=>res.status(500).send(err))
             if (!detail) {
