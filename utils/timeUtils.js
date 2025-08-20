@@ -38,6 +38,17 @@ const timeUtils = {
                 return timeInput;
             }
             
+            // If it's a timestamp (number)
+            if (typeof timeInput === 'number') {
+                const date = new Date(timeInput);
+                if (isNaN(date.getTime())) {
+                    throw new Error('Invalid timestamp');
+                }
+                const hours = date.getHours().toString().padStart(2, '0');
+                const minutes = date.getMinutes().toString().padStart(2, '0');
+                return `${hours}:${minutes}`;
+            }
+            
             // If it's an ISO string with timezone
             if (typeof timeInput === 'string' && timeInput.includes('T')) {
                 const date = new Date(timeInput);
@@ -126,6 +137,18 @@ const timeUtils = {
         if (!input) return null;
         
         try {
+            // Handle timestamp (number)
+            if (typeof input === 'number') {
+                const date = new Date(input);
+                if (isNaN(date.getTime())) {
+                    throw new Error('Invalid timestamp');
+                }
+                const year = date.getFullYear();
+                const month = (date.getMonth() + 1).toString().padStart(2, '0');
+                const day = date.getDate().toString().padStart(2, '0');
+                return `${year}-${month}-${day}`;
+            }
+            
             const date = new Date(input);
             if (isNaN(date.getTime())) {
                 throw new Error('Invalid date input');

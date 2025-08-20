@@ -239,14 +239,31 @@ const requestController ={
         let totalHelperCost = 0;
         
         for (let workingDate of workingDates) {
-            let helperCost = await calculateCost(new Date(workingDate), startTimeObj, endTimeObj, serviceFactor, coef_helper);
-            console.log("helper cost", helperCost);
+            let helperCost = 0;
+            let cost = 0;
             
-            let cost = await calculateTotalCost(req.body.service.title, standardizedStartTime, standardizedEndTime, workingDate)
-            .then(data => {  
-                console.log("cost", data);
-                return data.totalCost;
-            });
+            // Calculate helper cost if helper is assigned
+            if (helperId && coef_helper) {
+                try {
+                    // Simple helper cost calculation based on coefficient
+                    const costResult = await calculateTotalCost(req.body.service.title, standardizedStartTime, standardizedEndTime, workingDate);
+                    helperCost = (costResult.totalCost || 0) * coef_helper;
+                    console.log("helper cost", helperCost);
+                } catch (error) {
+                    console.warn("Error calculating helper cost:", error);
+                    helperCost = 0;
+                }
+            }
+            
+            // Calculate total cost
+            try {
+                const costResult = await calculateTotalCost(req.body.service.title, standardizedStartTime, standardizedEndTime, workingDate);
+                console.log("cost result", costResult);
+                cost = costResult.totalCost || 0;
+            } catch (error) {
+                console.warn("Error calculating total cost:", error);
+                cost = 0;
+            }
             
             totalHelperCost += helperCost;
             
