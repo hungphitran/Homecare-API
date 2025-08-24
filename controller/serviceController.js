@@ -2,41 +2,32 @@ const Service= require('../model/service.model')
 
 const serviceController={
     getAll : async (req,res,next)=>{
-        await Service.find({status:"active"})
-        .select('-__v -updatedBy -deletedBy -createdBy -createdAt -updatedAt -status -deleted')
-        .then((data)=> res.status(200).json(data))
-        .catch((err)=>{console.error(err)})
+        try {
+            const data = await Service.find({status:"active"})
+                .select('-__v -updatedBy -deletedBy -createdBy -createdAt -updatedAt -status -deleted');
+            res.status(200).json(data);
+        } catch (err) {
+            res.status(500).json({ error: 'Internal server error' });
+        }
     },
     getOneById: async (req, res, next) => {
-        const { idOrTitle } = req.params;
-        let query;
-        const mongoose = require('mongoose');
-        
-        console.log('Searching for service with idOrTitle:', idOrTitle);
-        
-        if (mongoose.Types.ObjectId.isValid(idOrTitle)) {
-            query = { _id: idOrTitle };
-            console.log('Using ObjectId query:', query);
-        } else {
-            query = { title: idOrTitle };
-            console.log('Using title query:', query);
-        }
-        
         try {
+            const { idOrTitle } = req.params;
+            let query;
+            const mongoose = require('mongoose');
+            
+            if (mongoose.Types.ObjectId.isValid(idOrTitle)) {
+                query = { _id: idOrTitle };
+            } else {
+                query = { title: idOrTitle };
+            }
+            
             const data = await Service.findOne(query)
                 .select('-__v -updatedBy -deletedBy -createdBy -createdAt -updatedAt -status -deleted');
             
             if (!data) {
-                console.log('Service not found for query:', query);
                 return res.status(404).json({ message: 'Service not found' });
             }
-            
-            console.log('Found service:', {
-                _id: data._id,
-                title: data.title,
-                basicPrice: data.basicPrice,
-                coefficient_id: data.coefficient_id
-            });
             
             // Transform data to match frontend expectations
             const transformedData = {
@@ -49,7 +40,6 @@ const serviceController={
             
             res.status(200).json(transformedData);
         } catch (err) {
-            console.error('Error in getOneById:', err);
             res.status(500).json({ message: 'Internal server error' });
         }
     }

@@ -4,14 +4,14 @@ const requestDetailSchema = new mongoose.Schema({
     workingDate: Date,
     startTime: Date, // Giờ bắt đầu làm việc
     endTime: Date, // Giờ kết thúc làm việc
-    helper_id: { type: String, default: null }, // ID của helper được gán, mặc định là null
+    helper_id: String,
     cost: Number, // Tổng tiền đơn nhỏ
     comment: {
         review: { type: String, default: '' },
         loseThings: { type: Boolean, default: false },
         breakThings: { type: Boolean, default: false }
     },
-    status: { type: String, default: 'pending' }, // pending -> assigned -> inProgress -> waitPayment -> completed | cancelled
+    status: String, // notDone - assigned - processing - done - cancelled
     helper_cost: Number
 }, {
     timestamps: true

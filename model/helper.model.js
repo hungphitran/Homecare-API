@@ -3,7 +3,6 @@ const mongoose = require("mongoose");
 const helperSchema = new mongoose.Schema({
     helper_id: String,
     fullName: String,
-    password: String, // Thêm field password
     startDate: {
         type: Date,
         default: Date.now()
@@ -37,6 +36,7 @@ const helperSchema = new mongoose.Schema({
     height: Number,
     weight: Number,
     status: String,
+    workingStatus: String,
     deleted: {
         type: Boolean,
         default: false

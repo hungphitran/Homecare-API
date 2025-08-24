@@ -2,13 +2,14 @@ const Location= require('../model/location.model')
 
 const locationController={
     getLocation : async (req,res,next)=>{
-        await Location.find()
-        .select('-_id -Districts._id -Districts.Wards._id')
-        .then((data)=> res.status(200).json(data))
-        .catch((err)=>{console.error(err)})
+        try {
+            const data = await Location.find()
+                .select('-_id -Districts._id -Districts.Wards._id');
+            res.status(200).json(data);
+        } catch (err) {
+            res.status(500).json({ error: 'Internal server error' });
+        }
     }
-
-    
 }
 
 module.exports=locationController;

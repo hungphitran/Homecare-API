@@ -2,6 +2,11 @@ const moment = require('moment');
 
 /**
  * Utility functions for time formatting and standardization
+ * IMPORTANT: All functions convert Vietnam timezone (UTC+7) to UTC for storage
+ * - Vietnam time is converted to UTC by subtracting 7 hours
+ * - All database timestamps are stored in UTC
+ * - All datetime operations use UTC after conversion
+ * - This ensures consistency across different server timezones
  */
 const timeUtils = {
     /**
@@ -26,6 +31,7 @@ const timeUtils = {
 
     /**
      * Standardize time input to HH:mm format (UTC)
+     * Converts Vietnam timezone (UTC+7) to UTC by subtracting 7 hours
      * @param {string|Date} timeInput - Time in various formats
      * @returns {string} Time in HH:mm format (UTC)
      */
@@ -33,9 +39,16 @@ const timeUtils = {
         if (!timeInput) return null;
         
         try {
-            // If it's already in HH:mm format, treat as UTC
+            // If it's already in HH:mm format, treat as Vietnam time and convert to UTC
             if (typeof timeInput === 'string' && /^\d{2}:\d{2}$/.test(timeInput)) {
-                return timeInput;
+                const [hours, minutes] = timeInput.split(':').map(Number);
+                // Convert Vietnam time to UTC by subtracting 7 hours
+                let utcHours = hours - 7;
+                // Handle negative hours (cross-midnight)
+                if (utcHours < 0) {
+                    utcHours += 24;
+                }
+                return `${utcHours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
             }
             
             // If it's a timestamp (number)
@@ -50,25 +63,45 @@ const timeUtils = {
                 return `${hours}:${minutes}`;
             }
             
-            // If it's an ISO string with timezone
+            // If it's an ISO datetime string
             if (typeof timeInput === 'string' && timeInput.includes('T')) {
                 const date = new Date(timeInput);
                 if (isNaN(date.getTime())) {
                     throw new Error('Invalid time');
                 }
+
+                // If the string contains a 'Z' (explicit UTC), use UTC getters.
+                // If it doesn't contain 'Z', treat as Vietnam time and convert to UTC
+                const useUtc = timeInput.includes('Z');
+                let hours, minutes;
                 
-                // Always use UTC time for consistency across all inputs
-                const hours = date.getUTCHours().toString().padStart(2, '0');
-                const minutes = date.getUTCMinutes().toString().padStart(2, '0');
-                return `${hours}:${minutes}`;
+                if (useUtc) {
+                    // Already UTC, use UTC getters
+                    hours = date.getUTCHours();
+                    minutes = date.getUTCMinutes();
+                } else {
+                    // Treat as Vietnam time, convert to UTC by subtracting 7 hours
+                    hours = date.getHours() - 7;
+                    minutes = date.getMinutes();
+                    // Handle negative hours (cross-midnight)
+                    if (hours < 0) {
+                        hours += 24;
+                    }
+                }
+                
+                return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
             }
             
             // If it's a Date object
             if (timeInput instanceof Date) {
-                // Always use UTC time for consistency
-                const hours = timeInput.getUTCHours().toString().padStart(2, '0');
-                const minutes = timeInput.getUTCMinutes().toString().padStart(2, '0');
-                return `${hours}:${minutes}`;
+                // Treat as Vietnam time, convert to UTC by subtracting 7 hours
+                let hours = timeInput.getHours() - 7;
+                const minutes = timeInput.getMinutes();
+                // Handle negative hours (cross-midnight)
+                if (hours < 0) {
+                    hours += 24;
+                }
+                return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
             }
             
             throw new Error('Unsupported time format');
@@ -80,7 +113,8 @@ const timeUtils = {
 
     /**
      * Convert time string and date to full ISO datetime
-     * @param {string} timeStr - Time in HH:mm format
+     * Time string is expected to be in UTC (after Vietnam time conversion)
+     * @param {string} timeStr - Time in HH:mm format (UTC)
      * @param {string} dateStr - Date in YYYY-MM-DD format
      * @param {boolean} treatAsUtc - Whether to treat the time as UTC (true) or local time (false)
      * @returns {Date} Full datetime object
@@ -96,14 +130,8 @@ const timeUtils = {
                 throw new Error('Invalid time values');
             }
             
-            let datetime;
-            if (treatAsUtc) {
-                // Create UTC datetime - treat input time as UTC
-                datetime = new Date(Date.UTC(year, month - 1, day, hours, minutes));
-            } else {
-                // Create local datetime - input time is treated as local time
-                datetime = new Date(year, month - 1, day, hours, minutes);
-            }
+            // Always create UTC datetime since timeStr is already converted to UTC
+            const datetime = new Date(Date.UTC(year, month - 1, day, hours, minutes));
             
             if (isNaN(datetime.getTime())) {
                 throw new Error('Invalid datetime combination');
@@ -117,6 +145,7 @@ const timeUtils = {
 
     /**
      * Extract date from various datetime formats (UTC)
+     * Converts Vietnam timezone (UTC+7) to UTC for date extraction
      * @param {string|Date} input - Datetime input
      * @returns {string} Date in YYYY-MM-DD format (UTC)
      */
@@ -141,11 +170,26 @@ const timeUtils = {
             if (isNaN(date.getTime())) {
                 throw new Error('Invalid date input');
             }
+
+            // If input string explicitly has 'Z', use UTC date parts.
+            // Otherwise treat as Vietnam time and convert to UTC
+            const inputStr = typeof input === 'string' ? input : '';
+            const useUtc = inputStr.includes('Z');
             
-            // Always use UTC date to ensure consistency
-            const year = date.getUTCFullYear();
-            const month = (date.getUTCMonth() + 1).toString().padStart(2, '0');
-            const day = date.getUTCDate().toString().padStart(2, '0');
+            let year, month, day;
+            if (useUtc) {
+                // Already UTC, use UTC date parts
+                year = date.getUTCFullYear();
+                month = (date.getUTCMonth() + 1).toString().padStart(2, '0');
+                day = date.getUTCDate().toString().padStart(2, '0');
+            } else {
+                // Treat as Vietnam time, convert to UTC by subtracting 7 hours
+                const utcDate = new Date(date.getTime() - (7 * 60 * 60 * 1000));
+                year = utcDate.getUTCFullYear();
+                month = (utcDate.getUTCMonth() + 1).toString().padStart(2, '0');
+                day = utcDate.getUTCDate().toString().padStart(2, '0');
+            }
+            
             return `${year}-${month}-${day}`;
         } catch (error) {
             console.error('Error extracting date:', error);
@@ -155,6 +199,7 @@ const timeUtils = {
 
     /**
      * Extract time from various datetime formats (UTC)
+     * Converts Vietnam timezone (UTC+7) to UTC for time extraction
      * @param {string|Date} input - Datetime input
      * @returns {string} Time in HH:mm format (UTC)
      */
@@ -166,11 +211,27 @@ const timeUtils = {
             if (isNaN(date.getTime())) {
                 throw new Error('Invalid time input');
             }
+
+            // If input string includes 'Z', use UTC time; otherwise treat as Vietnam time
+            const inputStr = typeof input === 'string' ? input : '';
+            const useUtc = inputStr.includes('Z');
             
-            // Always use UTC time for consistency
-            const hours = date.getUTCHours().toString().padStart(2, '0');
-            const minutes = date.getUTCMinutes().toString().padStart(2, '0');
-            return `${hours}:${minutes}`;
+            let hours, minutes;
+            if (useUtc) {
+                // Already UTC, use UTC time
+                hours = date.getUTCHours();
+                minutes = date.getUTCMinutes();
+            } else {
+                // Treat as Vietnam time, convert to UTC by subtracting 7 hours
+                hours = date.getHours() - 7;
+                minutes = date.getMinutes();
+                // Handle negative hours (cross-midnight)
+                if (hours < 0) {
+                    hours += 24;
+                }
+            }
+            
+            return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
         } catch (error) {
             console.error('Error extracting time:', error);
             return null;
@@ -229,8 +290,8 @@ const timeUtils = {
         }
     }
 
-    // NOTE: Timezone conversion functions commented out as we only use UTC
-    // No need to convert between UTC and local timezone since all calculations use UTC
+    // NOTE: All timezone operations convert Vietnam time (UTC+7) to UTC
+    // Vietnam time is converted to UTC by subtracting 7 hours for storage
     
     /**
      * Convert UTC datetime to Vietnam timezone for display (UNUSED - keeping UTC only)

@@ -1,13 +1,12 @@
 const mongoose = require("mongoose");
 
-const DiscountSchema = new mongoose.Schema({
+const roleSchema = new mongoose.Schema({
     title: String,
     description: String,
-    usageLimit: Number,
-    applyStartDate: Date,
-    applyEndDate: Date,
-    rate: Number,
-    status: String,
+    permissions: {
+        type: Array,
+        default: []
+    }, 
     deleted: {
         type: Boolean,
         default: false
@@ -30,6 +29,6 @@ const DiscountSchema = new mongoose.Schema({
     timestamps: true
 });
 
-const Discount = mongoose.model("Discount", DiscountSchema, "discounts");
+const role = mongoose.model("role", roleSchema, "roles");
 
-module.exports = Discount;
+module.exports = role;

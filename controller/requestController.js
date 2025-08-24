@@ -5,7 +5,7 @@ const mongoose = require('mongoose');
 const GeneralSetting = require('../model/general.model')
 const Service = require('../model/service.model')
 const CostFactor = require('../model/costFactorType.model')
-const Helper = require('../model/helper.model')
+// Helper model không cần thiết khi tạo đơn hàng - helper sẽ được gán sau
 const dayjs = require('dayjs');
 const moment = require('moment');
 const timeUtils = require('../utils/timeUtils');
@@ -17,7 +17,51 @@ const { notifyOrderStatusChange } = require('../utils/notifications');
  * - All database timestamps are stored in UTC
  * - All time comparisons and calculations use UTC
  * - This ensures consistency across different server timezones
+ * - All Date objects are created with 'Z' suffix to ensure UTC storage
+ * - Response times are converted to Vietnam timezone (+7) for client display
  */
+
+/**
+ * Helper function to convert UTC time to Vietnam time (+7) for response
+ * @param {Date|string} utcTime - UTC time from database
+ * @returns {string} Vietnam time in ISO format
+ */
+function convertUTCToVietnamTime(utcTime) {
+    if (!utcTime) return null;
+    
+    try {
+        const date = new Date(utcTime);
+        if (isNaN(date.getTime())) return null;
+        
+        // Add 7 hours to convert UTC to Vietnam time
+        const vietnamTime = new Date(date.getTime() + (7 * 60 * 60 * 1000));
+        return vietnamTime.toISOString();
+    } catch (error) {
+        console.error('Error converting UTC to Vietnam time:', error);
+        return utcTime;
+    }
+}
+
+/**
+ * Helper function to convert UTC date to Vietnam date for response
+ * @param {Date|string} utcDate - UTC date from database
+ * @returns {string} Vietnam date in YYYY-MM-DD format
+ */
+function convertUTCToVietnamDate(utcDate) {
+    if (!utcDate) return null;
+    
+    try {
+        const date = new Date(utcDate);
+        if (isNaN(date.getTime())) return null;
+        
+        // Add 7 hours to convert UTC to Vietnam time, then extract date
+        const vietnamTime = new Date(date.getTime() + (7 * 60 * 60 * 1000));
+        return vietnamTime.toISOString().split('T')[0];
+    } catch (error) {
+        console.error('Error converting UTC to Vietnam date:', error);
+        return utcDate;
+    }
+}
 
 /**
  * Helper function to fix inconsistent datetime data
@@ -32,42 +76,31 @@ function fixDateTimeConsistency(schedule) {
     // Fix workingDate to be at midnight if it's not
     const workingDate = new Date(schedule.workingDate);
     const workingDateStr = workingDate.toISOString().split('T')[0]; // Get just the date part
+    // Create a UTC-midnight Date (with 'Z') to ensure UTC storage
     const correctedWorkingDate = new Date(`${workingDateStr}T00:00:00.000Z`);
-    
+
     const startTime = new Date(schedule.startTime);
     const endTime = schedule.endTime ? new Date(schedule.endTime) : null;
-    
-    // Extract time components from original startTime and endTime
-    const startHours = startTime.getUTCHours().toString().padStart(2, '0');
-    const startMinutes = startTime.getUTCMinutes().toString().padStart(2, '0');
+
+    // Use local hours/minutes (getHours/getMinutes) so we preserve the wall-clock time
+    const startHours = startTime.getHours().toString().padStart(2, '0');
+    const startMinutes = startTime.getMinutes().toString().padStart(2, '0');
     const startTimeStr = `${startHours}:${startMinutes}`;
-    
-    // Create corrected startTime with workingDate
+
+    // Create corrected startTime with workingDate (with 'Z') to ensure UTC conversion
     const correctedStartTime = new Date(`${workingDateStr}T${startTimeStr}:00.000Z`);
-    
+
     let correctedEndTime = null;
     if (endTime) {
-        const endHours = endTime.getUTCHours().toString().padStart(2, '0');
-        const endMinutes = endTime.getUTCMinutes().toString().padStart(2, '0');
+        const endHours = endTime.getHours().toString().padStart(2, '0');
+        const endMinutes = endTime.getMinutes().toString().padStart(2, '0');
         const endTimeStr = `${endHours}:${endMinutes}`;
         correctedEndTime = new Date(`${workingDateStr}T${endTimeStr}:00.000Z`);
     }
-    
-    const wasFixed = correctedStartTime.toISOString() !== schedule.startTime.toISOString() ||
-                    correctedWorkingDate.toISOString() !== schedule.workingDate.toISOString();
-    
-    if (wasFixed) {
-        console.log(`🔧 Fixed datetime consistency for schedule ${schedule._id}:`, {
-            original: {
-                startTime: schedule.startTime,
-                workingDate: schedule.workingDate
-            },
-            corrected: {
-                startTime: correctedStartTime.toISOString(),
-                workingDate: correctedWorkingDate.toISOString()
-            }
-        });
-    }
+
+    // Compare by epoch to avoid string/UTC representation differences
+    const originalWorkingMidnight = new Date(workingDate.getFullYear(), workingDate.getMonth(), workingDate.getDate()).getTime();
+    const wasFixed = correctedStartTime.getTime() !== startTime.getTime() || correctedWorkingDate.getTime() !== originalWorkingMidnight;
     
     return {
         ...schedule,
@@ -117,10 +150,6 @@ async function calculateTotalCost (serviceTitle, startTime, endTime,workDate) {
     const officeStartUTC = moment.utc(`${workDate}T${officeStartTime}:00`);
     const officeEndUTC = moment.utc(`${workDate}T${officeEndTime}:00`);
 
-    // Log thời gian UTC để debug (không chuyển đổi timezone)
-    console.log(`[UTC Time] Bắt đầu: ${startUTC.format("HH:mm")}, Giờ hành chính: ${officeStartUTC.format("HH:mm")}`);
-    console.log(`[UTC Time] Kết thúc: ${endUTC.format("HH:mm")}, Giờ hành chính: ${officeEndUTC.format("HH:mm")}`);
-    
     let totalCost = 0;
 
     // Sử dụng UTC để tính toán ngày trong tuần (không chuyển đổi timezone)
@@ -129,26 +158,19 @@ async function calculateTotalCost (serviceTitle, startTime, endTime,workDate) {
     let T1 = 0; // Overtime hours
     let T2 = 0; // Normal hours
 
-    console.log(`[Debug UTC] Thời gian làm việc: ${startUTC.format("HH:mm")} - ${endUTC.format("HH:mm")}`);
-    console.log(`[Debug UTC] Giờ hành chính: ${officeStartUTC.format("HH:mm")} - ${officeEndUTC.format("HH:mm")}`);
-    console.log(`[Debug UTC] Tổng thời gian làm việc: ${dailyHours} giờ`);
-
     // Calculate overtime before office hours (UTC)
     if (startUTC.isBefore(officeStartUTC)) {
         const otBeforeOffice = officeStartUTC.diff(startUTC, "hour", true);
         T1 += otBeforeOffice;
-        console.log(`[OT UTC] Thời gian OT trước giờ hành chính: ${otBeforeOffice} giờ`);
     }
 
     // Calculate overtime after office hours (UTC)
     if (endUTC.isAfter(officeEndUTC)) {
         const otAfterOffice = endUTC.diff(officeEndUTC, "hour", true);
         T1 += otAfterOffice;
-        console.log(`[OT UTC] Thời gian OT sau giờ hành chính: ${otAfterOffice} giờ`);
     }
 
     T2 = Math.max(0, dailyHours - T1);
-    console.log(`[OT UTC] Tổng thời gian OT (T1): ${T1} giờ, Thời gian thường (T2): ${T2} giờ`);
 
     const isWeekend = (dayOfWeek === 0 || dayOfWeek === 6);
     const holiday = isHoliday(workDate);
@@ -179,16 +201,9 @@ const requestController ={
     //POST a new request
     create: async (req,res,next)=>{
         try {
-            console.log(req.body)
             if( typeof req.body.customerInfo == "string"){
                 req.body.customerInfo = JSON.parse(req.body.customerInfo);
             }
-            
-            console.log("Original input times:", {
-                originalStartTime: req.body.startTime,
-                originalEndTime: req.body.endTime,
-                originalOrderDate: req.body.orderDate
-            });
             
             // Standardize time inputs using timeUtils
             const standardizedStartTime = timeUtils.standardizeTime(req.body.startTime);
@@ -231,30 +246,21 @@ const requestController ={
                 workingDates.push(standardizedOrderDate);
             }
             
-            console.log("Input dates processing:", {
-                originalStartTime: req.body.startTime,
-                originalEndTime: req.body.endTime,
-                originalOrderDate: req.body.orderDate,
-                originalStartDate: req.body.startDate,
-                extractedStartDate,
-                extractedEndDate,
-                standardizedOrderDate,
-                startDate,
-                workingDates
-            });
+            // Validate working dates are not in the past
+            const currentDate = new Date().toISOString().split('T')[0];
+            const validWorkingDates = workingDates.filter(date => date >= currentDate);
+            
+            if (validWorkingDates.length === 0) {
+                return res.status(400).json({
+                    success: false,
+                    message: "All working dates are in the past. Please provide valid future dates."
+                });
+            }
+            
+            // Use valid working dates
+            const finalWorkingDates = validWorkingDates.length > 0 ? validWorkingDates : workingDates;
 
             req.body.customerInfo.usedPoint = 0;
-
-            console.log("Standardized UTC times:", {
-                originalStartTime: req.body.startTime,
-                originalEndTime: req.body.endTime,
-                standardizedStartTime,
-                standardizedEndTime,
-                extractedStartDate,
-                extractedEndDate,
-                orderDate: standardizedOrderDate,
-                workingDates
-            });
         
         // Check if service title is provided
         if (!req.body.service || !req.body.service.title) {
@@ -272,41 +278,39 @@ const requestController ={
             });
         }
         
-        let serviceFactor = await CostFactor.findOne({})
-        .then(data=>{
-            if (!data) throw new Error("Cost factor not found");
-            return data.coefficientList;//get all the coefficient of  services
-        })
-        .then(coefs=>{
-            return coefs.filter((coef,index)=>{
-                return coef._id == service.coefficient_id;
-            })
-        })
-        .then(coef=>{
-            if (!coef || coef.length === 0) throw new Error("Service coefficient not found");
-            return coef[0].value;
-        })
+        // Validate service coefficient
+        let serviceFactor = 1; // Default value
+        try {
+            const costFactorData = await CostFactor.findOne({ applyTo: "service" });
+            if (costFactorData && costFactorData.coefficientList) {
+                const matchingCoefficient = costFactorData.coefficientList.find(
+                    coef => coef._id.toString() === service.coefficient_id.toString()
+                );
+                if (matchingCoefficient) {
+                    serviceFactor = parseFloat(matchingCoefficient.value);
+                } else {
+                    console.warn(`Service coefficient not found for service: ${req.body.service.title}`);
+                }
+            } else {
+                console.warn("Cost factor data not found for services");
+            }
+        } catch (error) {
+            console.warn("Error fetching service coefficient:", error);
+            // Continue with default value
+        }
 
         let scheduleIds = [];
-        let helperId = req.body.helperId || req.body.helper_id || "";
-        let coef_helper = 0;
+        let totalCost = 0; // Tổng chi phí dịch vụ
         
-        if (helperId) {
-            coef_helper = await Helper.findOne({_id: helperId})
-            .then(data => {
-                console.log("coefficient id", data);
-                return data.baseFactor; // get the coefficient 
-            });
-        }
+        // Mặc định không có helper khi tạo đơn hàng
+        // Helper sẽ được gán sau này thông qua endpoint assign
         
-        let totalHelperCost = 0;
-        
-        for (let workingDate of workingDates) {
-            let helperCost = 0;
+        for (let workingDate of finalWorkingDates) {
             let cost = 0;
             
             // Tạo startTimeObj và endTimeObj cho từng workingDate cụ thể
             // Đảm bảo startTime và endTime được tạo với đúng workingDate để tránh sự không nhất quán
+            // Create UTC datetime objects to ensure consistent UTC storage
             const startTimeObj = timeUtils.timeToDate(standardizedStartTime, workingDate, true);
             const endTimeObj = timeUtils.timeToDate(standardizedEndTime, workingDate, true);
             
@@ -318,48 +322,24 @@ const requestController ={
                 }
             }
             
-            console.log(`Processing workingDate: ${workingDate}`, {
-                standardizedStartTime,
-                standardizedEndTime, 
-                workingDate,
-                startTimeObj_UTC: startTimeObj?.toISOString(),
-                endTimeObj_UTC: endTimeObj?.toISOString(),
-                workingDateForStorage: `${workingDate}T00:00:00.000Z`,
-                dateConsistencyCheck: startTimeObj ? startTimeObj.toISOString().split('T')[0] === workingDate : 'N/A'
-            });
-            
-            // Calculate helper cost if helper is assigned
-            if (helperId && coef_helper) {
-                try {
-                    // Simple helper cost calculation based on coefficient
-                    const costResult = await calculateTotalCost(req.body.service.title, standardizedStartTime, standardizedEndTime, workingDate);
-                    helperCost = (costResult.totalCost || 0) * coef_helper;
-                    console.log("helper cost", helperCost);
-                } catch (error) {
-                    console.warn("Error calculating helper cost:", error);
-                    helperCost = 0;
-                }
-            }
-            
-            // Calculate total cost
+            // Calculate total cost for this working date
             try {
                 const costResult = await calculateTotalCost(req.body.service.title, standardizedStartTime, standardizedEndTime, workingDate);
-                console.log("cost result", costResult);
                 cost = costResult.totalCost || 0;
+                totalCost += cost; // Accumulate total cost across all working dates
             } catch (error) {
-                console.warn("Error calculating total cost:", error);
+                console.warn("Error calculating cost for workingDate:", workingDate, error);
                 cost = 0;
             }
-            
-            totalHelperCost += helperCost;
             
             let reqDetail = new RequestDetail({
                 startTime: startTimeObj,
                 endTime: endTimeObj,
-                workingDate: new Date(`${workingDate}T00:00:00.000Z`), // Ensure UTC date at midnight
-                helper_id: helperId || null,
+                // Use UTC-midnight Date to ensure UTC storage (with 'Z')
+                workingDate: new Date(`${workingDate}T00:00:00.000Z`),
+                helper_id: null, // Mặc định không có helper
                 cost: cost || 0,
-                helper_cost: helperCost || 0,
+                helper_cost: 0, // Không có helper cost khi tạo đơn
                 status: "pending"
             });
             
@@ -370,73 +350,73 @@ const requestController ={
                 const workingDateHour = reqDetail.workingDate.toISOString().split('T')[1];
                 
                 if (startTimeDate !== workingDateStr) {
-                    console.error(`❌ Date mismatch in RequestDetail:`, {
-                        scheduleId: reqDetail._id,
-                        startTimeDate,
-                        workingDateStr,
-                        startTime: startTimeObj.toISOString(),
-                        workingDate: reqDetail.workingDate.toISOString()
-                    });
+                    console.warn(`Date mismatch in RequestDetail: startTimeDate=${startTimeDate}, workingDateStr=${workingDateStr}`);
                 }
                 
                 if (workingDateHour !== '00:00:00.000Z') {
-                    console.error(`❌ WorkingDate should be at midnight:`, {
-                        scheduleId: reqDetail._id,
-                        workingDate: reqDetail.workingDate.toISOString(),
-                        expected: `${workingDateStr}T00:00:00.000Z`
-                    });
+                    console.warn(`WorkingDate should be at midnight: workingDate=${reqDetail.workingDate.toISOString()}`);
                 }
-                
-                console.log(`✅ RequestDetail validation:`, {
-                    scheduleId: reqDetail._id,
-                    startTime: startTimeObj.toISOString(),
-                    workingDate: reqDetail.workingDate.toISOString(),
-                    consistent: startTimeDate === workingDateStr && workingDateHour === '00:00:00.000Z'
-                });
             }
             
-            console.log("reqDetail", reqDetail);
             await reqDetail.save()
             .then(() => scheduleIds.push(reqDetail._id))
             .catch(err => res.status(500).send(err));
         }
         
-        console.log("total helper cost", totalHelperCost, "total cost", req.body.totalCost);
+        // Validate total cost calculation
+        if (totalCost <= 0) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid cost calculation. Total cost must be greater than 0."
+            });
+        }
         
-        // Tạo startTime và endTime cho main Request dựa trên workingDate đầu tiên
-        const firstWorkingDate = workingDates[0] || standardizedOrderDate;
+        // Create new order
+        const firstWorkingDate = finalWorkingDates[0] || standardizedOrderDate;
         const mainStartTimeObj = timeUtils.timeToDate(standardizedStartTime, firstWorkingDate, true);
         const mainEndTimeObj = timeUtils.timeToDate(standardizedEndTime, firstWorkingDate, true);
         
-        let location = req.body.location || {  // handle location
-            province: req.body.province,
-            district: req.body.district,
-            ward: req.body.ward,
-        };
-
         let newOrder = new Request({
-            orderDate: new Date(`${standardizedOrderDate}T00:00:00.000Z`), // Store as UTC date
-            requestType: req.body.requestType,
-            scheduleIds: scheduleIds,
-            startTime: mainStartTimeObj,
-            endTime: mainEndTimeObj,
             customerInfo: req.body.customerInfo,
             service: req.body.service,
-            location: location,
-            profit: (req.body.totalCost - totalHelperCost) || 0,
-            totalCost: req.body.totalCost,
+            startTime: mainStartTimeObj,
+            endTime: mainEndTimeObj,
+            orderDate: new Date(`${standardizedOrderDate}T00:00:00.000Z`),
+            scheduleIds: scheduleIds,
+            totalCost: totalCost, // Sử dụng tổng chi phí đã tính toán
+            helper_cost: 0, // Không có helper cost khi tạo đơn
             status: "pending"
         });
         
-        console.log("new order", newOrder);
-        await newOrder.save()
-        .then(() => res.status(200).json("success"))
-        .catch((err) => res.status(500).json(err));
+        await newOrder.save();
+        res.status(201).json({
+            success: true,
+            message: "Order created successfully",
+            order: newOrder,
+            costBreakdown: {
+                totalServiceCost: totalCost,
+                workingDates: finalWorkingDates.length,
+                schedules: scheduleIds.length
+            },
+            note: "Helper will be assigned later through assign endpoint"
+        });
         } catch (error) {
             console.error("Error in create request:", error);
+            
+            // Provide more specific error messages
+            let errorMessage = "Internal server error";
+            if (error.name === 'ValidationError') {
+                errorMessage = "Validation error: " + Object.values(error.errors).map(e => e.message).join(', ');
+            } else if (error.name === 'CastError') {
+                errorMessage = "Invalid data format";
+            } else if (error.code === 11000) {
+                errorMessage = "Duplicate entry found";
+            }
+            
             res.status(500).json({
                 success: false,
-                message: error.message || "Internal server error"
+                message: errorMessage,
+                error: process.env.NODE_ENV === 'development' ? error.message : undefined
             });
         }
     },
@@ -445,14 +425,13 @@ const requestController ={
     
     // GET all request in database (sử dụng UTC cho tất cả tính toán thời gian)
     getAll: async (req,res,next)=>{
-        console.log("Fetching all requests");
         try {
             const requests = await Request.find()
             .select('-__v -createdBy -updatedBy -deletedBy -deleted -profit -createdAt -updatedAt');
             
+            // Use UTC time consistently - no timezone conversion needed
             let currentTime = new Date(); // Current UTC time
-            //add 7 hours to current time to match with Vietnam timezone
-            currentTime.setHours(currentTime.getHours() + 7);
+            // No timezone conversion needed - keep UTC
             const helperId = req.user.id || req.user.phone; // Lấy ID của helper hiện tại
 
             
@@ -463,23 +442,16 @@ const requestController ={
                         _id: { $in: request.scheduleIds }
                     }).select('-__v -createdAt -updatedAt');
                     
-                    // console.log("All schedules for request:", request._id, allSchedules);
                     // Lọc schedules theo yêu cầu: chỉ hiển thị những requestDetail chưa có helper nào được gán
                     const filteredSchedules = allSchedules.filter(schedule => {
                         // Chỉ hiển thị RequestDetail chưa được gán helper (status = pending, helper_id = null) 
                         // và thời gian bắt đầu cách hiện tại <= 2h (tính theo UTC)
                         
                         if (schedule.status === 'pending' && !schedule.helper_id && schedule.startTime) {
-                            console.log(`Processing schedule ${schedule.startTime}`);
                             // Fix datetime consistency before E
                             const correctedSchedule = fixDateTimeConsistency(schedule);
                             const scheduleStartTime = new Date(correctedSchedule.startTime);
-                            console.log(`Schedule start time (UTC): ${scheduleStartTime.toISOString()}`);
                             const timeDiffMinutes = (scheduleStartTime.getTime() - currentTime) / (1000 * 60);
-                            console.log(`Time difference in minutes: ${timeDiffMinutes} , current time: ${currentTime.toISOString()}`);
-                            // Update the schedule object with corrected values for response
-                            // schedule.startTime = correctedSchedule.startTime;
-                            // schedule.endTime = correctedSchedule.endTime;
                             
                             // Chỉ hiển thị nếu thời gian bắt đầu cách hiện tại tối đa 120 phút (2 giờ)
                             return timeDiffMinutes >= 0 && timeDiffMinutes <= 120;
@@ -488,10 +460,21 @@ const requestController ={
                         return false;
                     });
                     
-                    return {
+                    // Convert UTC times to Vietnam time for response
+                    const requestWithVietnamTime = {
                         ...request.toObject(),
-                        schedules: filteredSchedules
+                        orderDate: convertUTCToVietnamDate(request.orderDate),
+                        startTime: convertUTCToVietnamTime(request.startTime),
+                        endTime: convertUTCToVietnamTime(request.endTime),
+                        schedules: filteredSchedules.map(schedule => ({
+                            ...schedule.toObject(),
+                            startTime: convertUTCToVietnamTime(schedule.startTime),
+                            endTime: convertUTCToVietnamTime(schedule.endTime),
+                            workingDate: convertUTCToVietnamDate(schedule.workingDate)
+                        }))
                     };
+                    
+                    return requestWithVietnamTime;
                 })
             );
             
@@ -545,10 +528,21 @@ const requestController ={
                         schedule.helper_id === helperId
                     );
                     
-                    return {
+                    // Convert UTC times to Vietnam time for response
+                    const requestWithVietnamTime = {
                         ...request.toObject(),
-                        schedules: mySchedules
+                        orderDate: convertUTCToVietnamDate(request.orderDate),
+                        startTime: convertUTCToVietnamTime(request.startTime),
+                        endTime: convertUTCToVietnamTime(request.endTime),
+                        schedules: mySchedules.map(schedule => ({
+                            ...schedule.toObject(),
+                            startTime: convertUTCToVietnamTime(schedule.startTime),
+                            endTime: convertUTCToVietnamTime(schedule.endTime),
+                            workingDate: convertUTCToVietnamDate(schedule.workingDate)
+                        }))
                     };
+                    
+                    return requestWithVietnamTime;
                 })
             );
 
@@ -570,10 +564,21 @@ const requestController ={
                         _id: { $in: request.scheduleIds }
                     }).select('-__v -createdAt -updatedAt');
                     
-                    return {
+                    // Convert UTC times to Vietnam time for response
+                    const requestWithVietnamTime = {
                         ...request.toObject(),
-                        schedules: schedules
+                        orderDate: convertUTCToVietnamDate(request.orderDate),
+                        startTime: convertUTCToVietnamTime(request.startTime),
+                        endTime: convertUTCToVietnamTime(request.endTime),
+                        schedules: schedules.map(schedule => ({
+                            ...schedule.toObject(),
+                            startTime: convertUTCToVietnamTime(schedule.startTime),
+                            endTime: convertUTCToVietnamTime(schedule.endTime),
+                            workingDate: convertUTCToVietnamDate(schedule.workingDate)
+                        }))
                     };
+                    
+                    return requestWithVietnamTime;
                 })
             );
             
@@ -634,69 +639,40 @@ const requestController ={
             }
 
             // Check if the work time is within 2 hours from now 
-            // Add 7 hours to current time to match Vietnam timezone (as done in getAll method)
+            // Use UTC time consistently - no timezone conversion needed
             const currentTime = new Date();
-            currentTime.setHours(currentTime.getHours() + 7);
+            // No timezone conversion needed - keep UTC
             
             const scheduleStartTime = new Date(schedule.startTime);
             const timeDiffMinutes = (scheduleStartTime.getTime() - currentTime.getTime()) / (1000 * 60);
-            
-            console.log(`[ASSIGN DEBUG] Current time (VN): ${currentTime.toISOString()}`);
-            console.log(`[ASSIGN DEBUG] Schedule start time: ${scheduleStartTime.toISOString()}`);
-            console.log(`[ASSIGN DEBUG] Time difference: ${timeDiffMinutes} minutes`);
             
             // Allow assignment if work time is between now and 2 hours from now
             if (timeDiffMinutes < 0 || timeDiffMinutes > 120) {
                 return res.status(400).json({
                     success: false,
-                    message: "Cannot assign: work time is not within 2 hours window",
-                    debug: {
-                        currentTime: currentTime.toISOString(),
-                        scheduleStartTime: scheduleStartTime.toISOString(),
-                        timeDiffMinutes: timeDiffMinutes,
-                        withinWindow: timeDiffMinutes >= 0 && timeDiffMinutes <= 120
-                    }
+                    message: "Cannot assign: work time is not within 2 hours window"
                 });
             }
 
-            // Assign helper to this specific requestDetail
-            schedule.status = "assigned";
+            // Update the schedule
             schedule.helper_id = helperId;
+            schedule.status = "assigned";
             await schedule.save();
-
-            console.log(`[ASSIGN] ✅ Successfully assigned helper ${helperId} to schedule ${detailId}`);
-
-            // Find the parent request to send notification
-            console.log(`[ASSIGN] 🔍 Looking for parent request with scheduleId: ${detailId}`);
-            let request = await Request.findOne({ scheduleIds: { $in: [detailId] } });
+            
+            // Find parent request for notification
+            const request = await Request.findOne({ scheduleIds: { $in: [detailId] } });
             
             if (!request) {
-                console.error(`[ASSIGN] ❌ Could not find parent request for scheduleId: ${detailId}`);
-                console.error(`[ASSIGN] 🔍 Debugging - Let's check what requests exist:`);
-                
-                // Debug: Find all requests and log their scheduleIds
-                const allRequests = await Request.find({}).select('_id scheduleIds customerInfo.phone');
-                console.error(`[ASSIGN] Found ${allRequests.length} total requests in database:`);
-                
-                allRequests.forEach((req, index) => {
-                    console.error(`  Request ${index + 1}: ${req._id}`);
-                    console.error(`    - ScheduleIds: [${req.scheduleIds.join(', ')}]`);
-                    console.error(`    - Phone: ${req.customerInfo?.phone}`);
-                    console.error(`    - Contains target schedule? ${req.scheduleIds.some(id => id.toString() === detailId.toString())}`);
-                });
-                
-                // Try alternative search using ObjectId conversion
+                // Try alternative search methods
+                let requestWithObjectId = null;
                 try {
-                    const mongoose = require('mongoose');
-                    const objectIdDetailId = new mongoose.Types.ObjectId(detailId);
-                    const requestWithObjectId = await Request.findOne({ scheduleIds: { $in: [objectIdDetailId] } });
-                    
+                    const objectId = new mongoose.Types.ObjectId(detailId);
+                    requestWithObjectId = await Request.findOne({ scheduleIds: { $in: [objectId] } });
                     if (requestWithObjectId) {
-                        console.log(`[ASSIGN] ✅ Found parent request using ObjectId conversion: ${requestWithObjectId._id}`);
                         request = requestWithObjectId;
                     }
                 } catch (objIdError) {
-                    console.error(`[ASSIGN] ObjectId conversion failed:`, objIdError.message);
+                    // ObjectId conversion failed, continue with error handling
                 }
                 
                 if (!request) {
@@ -707,37 +683,13 @@ const requestController ={
                             helper_id: schedule.helper_id,
                             status: schedule.status
                         },
-                        warning: "Notification not sent - parent request not found",
-                        debug: {
-                            searchedScheduleId: detailId,
-                            totalRequestsInDb: allRequests.length,
-                            requestsWithSchedules: allRequests.map(r => ({
-                                requestId: r._id,
-                                scheduleCount: r.scheduleIds.length,
-                                scheduleIds: r.scheduleIds
-                            }))
-                        }
+                        warning: "Notification not sent - parent request not found"
                     });
                 }
             }
-            
-            console.log(`[ASSIGN] ✅ Found parent request: ${request._id}`);
-            console.log(`[ASSIGN] 📋 Request details:`, {
-                orderId: request._id,
-                customerPhone: request.customerInfo?.phone,
-                status: request.status,
-                scheduleIds: request.scheduleIds
-            });
 
             try {
-                console.log(`[ASSIGN] 📤 Sending notification for status change to "assigned"...`);
                 const notificationResult = await notifyOrderStatusChange(request, "assigned");
-                
-                if (notificationResult.success) {
-                    console.log(`[ASSIGN] ✅ Notification sent successfully`);
-                } else {
-                    console.error(`[ASSIGN] ❌ Notification failed:`, notificationResult.message);
-                }
                 
                 return res.status(200).json({
                     message: "Successfully assigned to requestDetail",
@@ -754,9 +706,6 @@ const requestController ={
                 });
                 
             } catch (e) {
-                console.error('[ASSIGN] 💥 Exception during notification:', e);
-                console.error('[ASSIGN] Stack trace:', e.stack);
-                
                 return res.status(200).json({
                     message: "Successfully assigned to requestDetail, but notification failed",
                     requestDetail: {
@@ -772,8 +721,7 @@ const requestController ={
                 });
             }
         } catch (err) {
-            console.error('[ASSIGN] 💥 Outer catch block - unexpected error:', err);
-            return res.status(500).send(err.message || "An error occurred");
+            return res.status(500).json({ error: 'Internal server error' });
         }
     },
     
@@ -851,8 +799,7 @@ const requestController ={
             return res.status(500).send("Cannot change status of detail");
 
         } catch (err) {
-            console.error(err);
-            return res.status(500).send(err.message || "An error occurred");
+            return res.status(500).json({ error: 'Internal server error' });
         }
     },
     rejectHelper:  async (req,res,next)=>{
@@ -867,15 +814,12 @@ const requestController ={
                 .then(data=>data)
                 .catch(err=>res.status(500).send(err))
                 schedule.helper_id = null // Reset helper assignment
-                schedule.save()
-                .then(()=>console.log("Schedule updated successfully"))
-                .catch(err=>res.status(500).send(err))
+                await schedule.save()
             }
             res.status(200).send("Success")
 
         } catch (err) {
-            console.error(err);
-            return res.status(500).send(err.message || "An error occurred");
+            return res.status(500).json({ error: 'Internal server error' });
         }
     },
 
@@ -905,13 +849,12 @@ const requestController ={
                     });
                 }
                 finalServiceTitle = service.title;
-                console.log("Resolved service title:", finalServiceTitle);
             }
             
             // Sử dụng thời gian UTC một cách nhất quán
             let finalStartTime, finalEndTime, finalWorkDate;
             
-            // Handle different input formats  
+            // Handle different input formats - always convert to UTC
             if (startTime && startTime.includes('T')) {
                 // ISO timestamp format - sử dụng UTC time
                 const startUTC = new Date(startTime);
@@ -928,23 +871,8 @@ const requestController ={
                 finalWorkDate = timeUtils.standardizeDate(workDate);
             }
             
-            console.log("Standardized UTC inputs for cost calculation:", {
-                originalStart: startTime,
-                originalEnd: endTime,
-                originalWorkDate: workDate,
-                finalStartTime,
-                finalEndTime,
-                finalWorkDate
-            });
-            
             // Validate required parameters
             if (!finalServiceTitle || !finalStartTime || !finalEndTime || !finalWorkDate) {
-                console.error("Missing required parameters:", {
-                    serviceTitle: finalServiceTitle,
-                    startTime: finalStartTime,
-                    endTime: finalEndTime,
-                    workDate: finalWorkDate
-                });
                 return res.status(400).json({
                     error: "Missing required parameters",
                     message: "serviceTitle (or serviceId), startTime, endTime, and workDate are required",
@@ -966,15 +894,12 @@ const requestController ={
             }
             
             let cost = await calculateTotalCost(finalServiceTitle, finalStartTime, finalEndTime, finalWorkDate);
-            console.log("Calculated cost:", cost);
             res.status(200).json(cost);
             
         } catch (error) {
-            console.error("Error calculating cost:", error);
             res.status(500).json({
                 error: "Internal server error",
-                message: "Không thể tính toán chi phí",
-                details: error.message
+                message: "Không thể tính toán chi phí"
             });
         }
     },
@@ -982,8 +907,6 @@ const requestController ={
     // Utility method to fix inconsistent datetime data in database
     fixDateTimeInconsistencies: async (req, res, next) => {
         try {
-            console.log("🔧 Starting datetime inconsistency fix...");
-            
             // Find all RequestDetail records
             const allSchedules = await RequestDetail.find({});
             const fixedSchedules = [];
@@ -1043,8 +966,6 @@ const requestController ={
                 }
             }
             
-            console.log(`🔧 Fixed ${fixedSchedules.length} schedules out of ${allSchedules.length} total`);
-            
             res.status(200).json({
                 success: true,
                 message: `Fixed ${fixedSchedules.length} inconsistent records`,
@@ -1057,11 +978,9 @@ const requestController ={
             });
             
         } catch (error) {
-            console.error("Error fixing datetime inconsistencies:", error);
             res.status(500).json({
                 success: false,
-                message: "Error fixing datetime inconsistencies",
-                error: error.message
+                message: "Error fixing datetime inconsistencies"
             });
         }
     }
