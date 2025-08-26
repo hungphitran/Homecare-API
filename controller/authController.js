@@ -27,7 +27,7 @@ const authController = {
             }
 
             // Kiểm tra customer đã tồn tại
-            const existingCustomer = await Customer.findOne({ phone });
+            const existingCustomer = await Customer.findOne({ phone })
             if (existingCustomer) {
                 return res.status(409).json({
                     error: 'Phone already exists',
@@ -165,7 +165,7 @@ const authController = {
             }
 
             // Tìm helper
-        const helper = await Helper.findOne({ phone });
+        const helper = await Helper.findOne({ phone })
             if (!helper) {
                 return res.status(401).json({
                     error: 'Invalid credentials',

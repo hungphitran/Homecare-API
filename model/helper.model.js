@@ -37,6 +37,7 @@ const helperSchema = new mongoose.Schema({
     weight: Number,
     status: String,
     workingStatus: String,
+    password: String,
     deleted: {
         type: Boolean,
         default: false

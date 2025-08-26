@@ -300,7 +300,7 @@ const requestController ={
         }
 
         let scheduleIds = [];
-        let totalCost = 0; // Tổng chi phí dịch vụ
+        let totalCost = req.body.totalCost; // Tổng chi phí dịch vụ
         
         // Mặc định không có helper khi tạo đơn hàng
         // Helper sẽ được gán sau này thông qua endpoint assign
@@ -323,14 +323,14 @@ const requestController ={
             }
             
             // Calculate total cost for this working date
-            try {
-                const costResult = await calculateTotalCost(req.body.service.title, standardizedStartTime, standardizedEndTime, workingDate);
-                cost = costResult.totalCost || 0;
-                totalCost += cost; // Accumulate total cost across all working dates
-            } catch (error) {
-                console.warn("Error calculating cost for workingDate:", workingDate, error);
-                cost = 0;
-            }
+            // try {
+            //     const costResult = await calculateTotalCost(req.body.service.title, standardizedStartTime, standardizedEndTime, workingDate);
+            //     cost = costResult.totalCost || 0;
+            //     totalCost += cost; // Accumulate total cost across all working dates
+            // } catch (error) {
+            //     console.warn("Error calculating cost for workingDate:", workingDate, error);
+            //     cost = 0;
+            // }
             
             let reqDetail = new RequestDetail({
                 startTime: startTimeObj,
@@ -338,7 +338,7 @@ const requestController ={
                 // Use UTC-midnight Date to ensure UTC storage (with 'Z')
                 workingDate: new Date(`${workingDate}T00:00:00.000Z`),
                 helper_id: null, // Mặc định không có helper
-                cost: cost || 0,
+                cost: totalCost/finalWorkingDates.length() || 0,
                 helper_cost: 0, // Không có helper cost khi tạo đơn
                 status: "pending"
             });
