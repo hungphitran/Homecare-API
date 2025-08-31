@@ -17,14 +17,14 @@ router.post('/assign', authenticateToken, requireHelper, requestController.assig
 // Customer can cancel their own requests
 router.post('/cancel', authenticateToken, requireCustomer, requestController.cancelRequest)
 
-// Customer can get their own requests
-router.get('/:phone', authenticateToken, requireOwnership, requestController.getByPhone);
-
 // Admin/Helper can get all available requests (chưa có helper)
 router.get('/', authenticateToken, requireHelper, requestController.getAll);
 
 // Helper can get their assigned requests
 router.get('/my-assigned', authenticateToken, requireHelper, requestController.getMyAssignedRequests);
+
+// Customer can get their own requests (must come after other specific routes)
+router.get('/:phone', authenticateToken, requireOwnership, requestController.getByPhone);
 
 // Customer can create requests
 router.post('/', authenticateToken, requireCustomer, requestController.create);

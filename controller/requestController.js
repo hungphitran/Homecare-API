@@ -177,14 +177,41 @@ const requestController ={
             // Handle orderDate - standardize and derive from startTime if not provided
             let orderDate = req.body.orderDate;
             if (!orderDate && req.body.startTime) {
-                orderDate = timeUtils.extractDate(req.body.startTime);
+                try {
+                    orderDate = timeUtils.extractDate(req.body.startTime);
+                    if (!orderDate) {
+                        // If extraction fails, use current date
+                        orderDate = new Date().toISOString().split('T')[0];
+                        console.warn("Could not extract date from startTime, using current date instead");
+                    }
+                } catch (err) {
+                    console.error("Error extracting date from startTime:", err);
+                    // Fallback to current date
+                    orderDate = new Date().toISOString().split('T')[0];
+                }
             }
             
             const standardizedOrderDate = timeUtils.standardizeDate(orderDate) || timeUtils.standardizeDate(new Date());
             
             // Extract individual dates for start and end times to handle cross-day scenarios
-            const extractedStartDate = req.body.startTime ? timeUtils.extractDate(req.body.startTime) : standardizedOrderDate;
-            const extractedEndDate = req.body.endTime ? timeUtils.extractDate(req.body.endTime) : standardizedOrderDate;
+            let extractedStartDate;
+            let extractedEndDate;
+            
+            try {
+                extractedStartDate = req.body.startTime ? timeUtils.extractDate(req.body.startTime) : standardizedOrderDate;
+                if (!extractedStartDate) extractedStartDate = standardizedOrderDate;
+            } catch (err) {
+                console.error("Error extracting start date:", err);
+                extractedStartDate = standardizedOrderDate;
+            }
+            
+            try {
+                extractedEndDate = req.body.endTime ? timeUtils.extractDate(req.body.endTime) : standardizedOrderDate;
+                if (!extractedEndDate) extractedEndDate = standardizedOrderDate;
+            } catch (err) {
+                console.error("Error extracting end date:", err);
+                extractedEndDate = standardizedOrderDate;
+            }
             
             // Handle startDate - derive from startTime if not provided
             let startDate = req.body.startDate || extractedStartDate;
@@ -258,9 +285,6 @@ const requestController ={
         for (let workingDate of finalWorkingDates) {
             let cost = 0;
             
-            // Tạo startTimeObj và endTimeObj cho từng workingDate cụ thể
-            // Đảm bảo startTime và endTime được tạo với đúng workingDate để tránh sự không nhất quán
-            // Create UTC datetime objects to ensure consistent UTC storage
             const startTimeObj = timeUtils.timeToDate(standardizedStartTime, workingDate, true);
             const endTimeObj = timeUtils.timeToDate(standardizedEndTime, workingDate, true);
             
@@ -271,24 +295,13 @@ const requestController ={
                     console.warn(`Date mismatch detected: workingDate=${workingDate}, startTimeDate=${startTimeDate}`);
                 }
             }
-            
-            // Calculate total cost for this working date
-            // try {
-            //     const costResult = await calculateTotalCost(req.body.service.title, standardizedStartTime, standardizedEndTime, workingDate);
-            //     cost = costResult.totalCost || 0;
-            //     totalCost += cost; // Accumulate total cost across all working dates
-            // } catch (error) {
-            //     console.warn("Error calculating cost for workingDate:", workingDate, error);
-            //     cost = 0;
-            // }
-            
             let reqDetail = new RequestDetail({
                 startTime: startTimeObj,
                 endTime: endTimeObj,
                 // Use UTC-midnight Date to ensure UTC storage (with 'Z')
                 workingDate: new Date(`${workingDate}T00:00:00.000Z`),
-                helper_id: null, // Mặc định không có helper
-                cost: totalCost/finalWorkingDates.length() || 0,
+                helper_id: "notAvailable", // Mặc định không có helper
+                cost: totalCost/finalWorkingDates.length || 0,
                 helper_cost: 0, // Không có helper cost khi tạo đơn
                 status: "pending"
             });
@@ -443,63 +456,76 @@ const requestController ={
     },
     getMyAssignedRequests: async (req,res,next)=>{
         try {
-            const helperId = req.user.id || req.user.phone; // Get helper ID from JWT token
+            const helperId = req.user.id || req.user.phone || req.user.helper_id; // Get helper ID from JWT token
             
             // Find all requestDetails assigned to this helper
             const myRequestDetails = await RequestDetail.find({
-                helper_id: helperId
-            }).select('-__v -createdAt -updatedAt');
+                helper_id: String(helperId),  // Ensure consistent string comparison
+                // Optional: Filter by status if needed
+                // status: { $in: ['assigned', 'inProgress', 'waitPayment'] }
+            }).select('-__v -createdAt -updatedAt').lean();
 
             if (!myRequestDetails.length) {
                 return res.status(200).json([]);
             }
 
-            // Get unique request IDs
-            const requestIds = [];
-            for (const detail of myRequestDetails) {
-                const request = await Request.findOne({ scheduleIds: { $in: [detail._id] } });
-                if (request && !requestIds.some(id => id.equals(request._id))) {
-                    requestIds.push(request._id);
-                }
-            }
-
-            // Get full requests with all their schedules
+            // Extract all the request detail IDs
+            const detailIds = myRequestDetails.map(detail => detail._id);
+            
+            // More efficient approach: Find requests containing these schedules in a single query
             const requests = await Request.find({
-                _id: { $in: requestIds }
-            }).select('-__v -createdBy -updatedBy -deletedBy -deleted -profit -createdAt -updatedAt');
+                scheduleIds: { $in: detailIds }
+            }).select('-__v -createdBy -updatedBy -deletedBy -deleted -profit -createdAt -updatedAt').lean();
+            
+            // Create a map for quick lookups
+            const requestMap = new Map(requests.map(req => [req._id.toString(), req]));
 
-            const requestsWithSchedules = await Promise.all(
-                requests.map(async (request) => {
-                    const allSchedules = await RequestDetail.find({
-                        _id: { $in: request.scheduleIds }
-                    }).select('-__v -createdAt -updatedAt');
-                    
-                    // Only show schedules assigned to this helper
-                    const mySchedules = allSchedules.filter(schedule => 
-                        schedule.helper_id === helperId
-                    );
-                    
-                    // Convert UTC times to Vietnam time for response
-                    const requestWithVietnamTime = {
-                        ...request.toObject(),
-                        orderDate: convertUTCToVietnamDate(request.orderDate),
-                        startTime: convertUTCToVietnamTime(request.startTime),
-                        endTime: convertUTCToVietnamTime(request.endTime),
-                        schedules: mySchedules.map(schedule => ({
-                            ...schedule.toObject(),
-                            startTime: convertUTCToVietnamTime(schedule.startTime),
-                            endTime: convertUTCToVietnamTime(schedule.endTime),
-                            workingDate: convertUTCToVietnamDate(schedule.workingDate)
-                        }))
-                    };
-                    
-                    return requestWithVietnamTime;
-                })
-            );
+            // Optimize by grouping schedules by request ID
+            const schedulesByRequestId = {};
+            myRequestDetails.forEach(schedule => {
+                // Find which request this schedule belongs to
+                const request = requests.find(req => 
+                    req.scheduleIds && req.scheduleIds.some(sid => 
+                        sid.toString() === schedule._id.toString()
+                    )
+                );
+                
+                if (request) {
+                    const requestId = request._id.toString();
+                    if (!schedulesByRequestId[requestId]) {
+                        schedulesByRequestId[requestId] = [];
+                    }
+                    schedulesByRequestId[requestId].push(schedule);
+                }
+            });
+            
+            // Format response with proper time conversions
+            const requestsWithSchedules = requests.map(request => {
+                const requestId = request._id.toString();
+                const mySchedules = schedulesByRequestId[requestId] || [];
+                
+                // Convert UTC times to Vietnam time for response
+                return {
+                    ...request,
+                    orderDate: convertUTCToVietnamDate(request.orderDate),
+                    startTime: convertUTCToVietnamTime(request.startTime),
+                    endTime: convertUTCToVietnamTime(request.endTime),
+                    schedules: mySchedules.map(schedule => ({
+                        ...schedule,
+                        startTime: convertUTCToVietnamTime(schedule.startTime),
+                        endTime: convertUTCToVietnamTime(schedule.endTime),
+                        workingDate: convertUTCToVietnamDate(schedule.workingDate)
+                    }))
+                };
+            }).filter(req => req.schedules && req.schedules.length > 0); // Only include requests with schedules
 
             res.status(200).json(requestsWithSchedules);
         } catch (err) {
-            res.status(500).json(err);
+            console.error('Error in getMyAssignedRequests:', err);
+            res.status(500).json({
+                error: 'Internal server error',
+                message: 'Đã xảy ra lỗi khi lấy danh sách đơn hàng'
+            });
         }
     },
 
@@ -576,6 +602,7 @@ const requestController ={
 
     },
     assign: async (req,res,next)=>{
+        console.log("Assigning helper to requestDetail", req.body);
         let detailId = req.body.detailId; // Change to receive requestDetail ID
         let helperId = req.user.id || req.user.phone; // Get helper ID from JWT token
         

@@ -157,7 +157,8 @@ const timeUtils = {
             if (typeof input === 'number') {
                 const date = new Date(input);
                 if (isNaN(date.getTime())) {
-                    throw new Error('Invalid timestamp');
+                    console.warn('Invalid timestamp:', input);
+                    return null;
                 }
                 // Use UTC date to avoid timezone shifts
                 const year = date.getUTCFullYear();
@@ -166,9 +167,15 @@ const timeUtils = {
                 return `${year}-${month}-${day}`;
             }
             
+            // If input is already in YYYY-MM-DD format, return as is
+            if (typeof input === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(input)) {
+                return input;
+            }
+            
             const date = new Date(input);
             if (isNaN(date.getTime())) {
-                throw new Error('Invalid date input');
+                console.warn('Invalid date input:', input);
+                return null;
             }
 
             // If input string explicitly has 'Z', use UTC date parts.

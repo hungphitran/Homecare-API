@@ -55,28 +55,66 @@ const requireCustomer = (req, res, next) => {
 
 // Middleware để kiểm tra quyền truy cập resource của chính user đó
 const requireOwnership = (req, res, next) => {
-    const resourceUserId = req.params.phone || req.params.id;
-    let currentUserId;
-    
-    // Xử lý khác nhau cho customer và helper
-    if (req.user.role === 'customer') {
-        // Customer sử dụng phone hoặc id
-        currentUserId = req.user.phone || req.user.id;
-    } else if (req.user.role === 'helper') {
-        // Helper sử dụng helper_id hoặc id tùy thuộc vào resource
-        currentUserId = req.user.helper_id || req.user.id;
-    } else {
-        currentUserId = req.user.id;
-    }
-    
-    console.log(`Resource User ID: ${resourceUserId}, Current User ID: ${currentUserId}, Role: ${req.user.role}`);
+    try {
+        if (!req.user) {
+            return res.status(401).json({
+                error: 'Authentication required',
+                message: 'Yêu cầu đăng nhập để thực hiện hành động này'
+            });
+        }
 
-    if (currentUserId === resourceUserId) {
-        next();
-    } else {
-        return res.status(403).json({ 
-            error: 'Access denied',
-            message: 'Bạn chỉ có thể truy cập thông tin của chính mình'
+        // Lấy resource ID từ các tham số phổ biến
+        const resourceUserId = req.params.phone || req.params.id || req.params.helper_id || req.params.customer_id;
+        
+        // Kiểm tra các trường hợp đặc biệt - không yêu cầu ownership cho các route đặc biệt
+        const specialRoutes = ['my-assigned', 'my-requests', 'profile'];
+        if (specialRoutes.includes(resourceUserId)) {
+            // Đây là route đặc biệt, không cần kiểm tra ownership
+            return next();
+        }
+        
+        if (!resourceUserId) {
+            return res.status(400).json({
+                error: 'Bad request',
+                message: 'Resource ID không được tìm thấy trong request'
+            });
+        }
+        
+        let currentUserId;
+        
+        // Xử lý khác nhau cho customer và helper
+        if (req.user.role === 'customer') {
+            // Customer sử dụng phone hoặc id
+            currentUserId = String(req.user.phone || req.user.id);
+        } else if (req.user.role === 'helper') {
+            // Helper sử dụng helper_id hoặc id tùy thuộc vào resource
+            currentUserId = String(req.user.helper_id || req.user.id);
+        } else {
+            currentUserId = String(req.user.id);
+        }
+        
+        // Chuyển đổi ID thành string để so sánh chính xác
+        const resourceId = String(resourceUserId);
+        
+        // Log chỉ trong môi trường phát triển
+        if (process.env.NODE_ENV !== 'production') {
+            console.log(`Resource User ID: ${resourceId}, Current User ID: ${currentUserId}, Role: ${req.user.role}`);
+        }
+
+        // So sánh ID sau khi đã chuẩn hóa
+        if (currentUserId === resourceId) {
+            next();
+        } else {
+            return res.status(403).json({ 
+                error: 'Access denied',
+                message: 'Bạn chỉ có thể truy cập thông tin của chính mình'
+            });
+        }
+    } catch (error) {
+        console.error('Error in requireOwnership middleware:', error);
+        return res.status(500).json({
+            error: 'Internal server error', 
+            message: 'Đã xảy ra lỗi khi xác thực quyền truy cập'
         });
     }
 };
