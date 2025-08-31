@@ -11,15 +11,6 @@ const moment = require('moment');
 const timeUtils = require('../utils/timeUtils');
 const { notifyOrderStatusChange } = require('../utils/notifications');
 
-/**
- * IMPORTANT: All time calculations in this controller use UTC timezone
- * - No timezone conversions are performed 
- * - All database timestamps are stored in UTC
- * - All time comparisons and calculations use UTC
- * - This ensures consistency across different server timezones
- * - All Date objects are created with 'Z' suffix to ensure UTC storage
- * - Response times are converted to Vietnam timezone (+7) for client display
- */
 
 /**
  * Helper function to convert UTC time to Vietnam time (+7) for response
@@ -68,133 +59,6 @@ function convertUTCToVietnamDate(utcDate) {
  * Ensures startTime and endTime use the same date as workingDate
  * Also ensures workingDate is at midnight (00:00:00)
  */
-function fixDateTimeConsistency(schedule) {
-    if (!schedule.startTime || !schedule.workingDate) {
-        return schedule;
-    }
-    
-    try {
-        console.log(`===== Debug fixDateTimeConsistency =====`);
-        console.log(`Original startTime: ${schedule.startTime}`);
-        console.log(`Original workingDate: ${schedule.workingDate}`);
-        
-        // Parse startTime string from the database format
-        // Get a clean Date object first, but it will be interpreted in local time zone
-        const startTime = new Date(schedule.startTime);
-        console.log(`Date object from startTime: ${startTime.toString()}`);
-        console.log(`Date toISOString: ${startTime.toISOString()}`);
-        
-        // Xác định múi giờ từ chuỗi thời gian (nếu có)
-        const startTimeString = schedule.startTime.toString();
-        let timezoneOffsetHours = 7; // Mặc định là múi giờ Việt Nam (GMT+7)
-        
-        // Try to extract timezone offset from the string if available
-        if (startTimeString.includes('GMT+')) {
-            const match = startTimeString.match(/GMT\+(\d+)/);
-            if (match && match[1]) {
-                timezoneOffsetHours = parseInt(match[1]);
-                console.log(`Detected timezone offset: GMT+${timezoneOffsetHours}`);
-            }
-        } else if (startTimeString.includes('GMT-')) {
-            const match = startTimeString.match(/GMT-(\d+)/);
-            if (match && match[1]) {
-                timezoneOffsetHours = -parseInt(match[1]);
-                console.log(`Detected timezone offset: GMT${timezoneOffsetHours}`);
-            }
-        } else {
-            console.log(`No timezone detected in string, using default GMT+7`);
-        }
-        
-        // Lấy giờ và phút từ đối tượng Date (theo giờ địa phương)
-        const localHours = startTime.getHours();
-        const localMinutes = startTime.getMinutes();
-        console.log(`Local time extracted: ${localHours}:${localMinutes}`);
-        
-        // Convert to UTC hours by subtracting the timezone offset
-        // Example: 17:00 GMT+7 becomes 10:00 UTC (17-7=10)
-        const utcHours = (localHours - timezoneOffsetHours + 24) % 24;
-        const utcMinutes = localMinutes;
-        console.log(`Calculated UTC time: ${utcHours}:${utcMinutes}`);
-        
-        // Format as padded strings
-        const startHours = utcHours.toString().padStart(2, '0');
-        const startMinutes = utcMinutes.toString().padStart(2, '0');
-        
-        // QUAN TRỌNG: Lấy ngày từ startTime chứ không phải workingDate
-        // Điều này đảm bảo chúng ta không mất thông tin về ngày
-        const startYear = startTime.getFullYear();
-        const startMonth = startTime.getMonth(); // 0-11
-        const startDay = startTime.getDate();
-        console.log(`Date parts from startTime: ${startYear}-${startMonth+1}-${startDay}`);
-        
-        // Tạo workingDate từ startTime nhưng đặt giờ về 00:00:00
-        const correctedWorkingDate = new Date(Date.UTC(startYear, startMonth, startDay, 0, 0, 0));
-        
-        // Tạo startTime UTC với giờ đã được chuyển đổi, giữ nguyên ngày từ startTime gốc
-        const correctedStartTime = new Date(Date.UTC(startYear, startMonth, startDay, parseInt(startHours), parseInt(startMinutes), 0));
-        
-        // Handle endTime if it exists
-        let correctedEndTime = null;
-        if (schedule.endTime) {
-            // Get a clean Date object for endTime
-            const endTime = new Date(schedule.endTime);
-            
-            // Calculate the UTC equivalent of the local endTime
-            const endTimeString = schedule.endTime.toString();
-            let timezoneOffsetHours = 7; // Mặc định là múi giờ Việt Nam (GMT+7)
-            
-            // Try to extract timezone offset from the string if available
-            if (endTimeString.includes('GMT+')) {
-                const match = endTimeString.match(/GMT\+(\d+)/);
-                if (match && match[1]) {
-                    timezoneOffsetHours = parseInt(match[1]);
-                }
-            } else if (endTimeString.includes('GMT-')) {
-                const match = endTimeString.match(/GMT-(\d+)/);
-                if (match && match[1]) {
-                    timezoneOffsetHours = -parseInt(match[1]);
-                }
-            }
-            
-            // Get local hours and minutes first
-            const localHours = endTime.getHours();
-            const localMinutes = endTime.getMinutes();
-            
-            // Convert to UTC hours by subtracting the timezone offset
-            const utcHours = (localHours - timezoneOffsetHours + 24) % 24;
-            const utcMinutes = localMinutes;
-            
-            // Format as padded strings
-            const endHours = utcHours.toString().padStart(2, '0');
-            const endMinutes = utcMinutes.toString().padStart(2, '0');
-            
-            // Sử dụng các biến startYear, startMonth, startDay để đảm bảo endTime cùng ngày với startTime
-            correctedEndTime = new Date(Date.UTC(startYear, startMonth, startDay, parseInt(endHours), parseInt(endMinutes), 0));
-            console.log(`End time in UTC: ${correctedEndTime.toISOString()}`);
-        }
-        
-        // Log kết quả cuối cùng
-        console.log(`Original start time: ${schedule.startTime}`); 
-        console.log(`Extracted date: ${startYear}-${startMonth+1}-${startDay}`);
-        console.log(`Corrected working date (UTC): ${correctedWorkingDate.toISOString()}`);
-        console.log(`Corrected start time (UTC): ${correctedStartTime.toISOString()}`);
-        
-        // Thời gian hiển thị theo múi giờ Việt Nam
-        const vnStartTime = new Date(correctedStartTime.getTime() + (7 * 60 * 60 * 1000));
-        console.log(`Vietnam start time: ${vnStartTime.toLocaleString('vi-VN')} (${vnStartTime.toISOString()})`);
-        console.log(`===== End Debug =====`);
-        
-        return {
-            ...schedule,
-            startTime: correctedStartTime,
-            endTime: correctedEndTime,
-            workingDate: correctedWorkingDate
-        };
-    } catch (error) {
-        console.error("Error in fixDateTimeConsistency:", error);
-        return schedule; // Return original schedule if there's an error
-    }
-}
 
 async function calculateTotalCost (serviceTitle, startTime, endTime,workDate) {
     if (!startTime || !endTime || !workDate || !serviceTitle) {
@@ -517,9 +381,6 @@ const requestController ={
             
             // Lấy thời gian hiện tại theo UTC
             let currentTime = new Date();
-            
-            // Debug với thời gian Việt Nam
-            const vnTime = new Date(currentTime.getTime() + (7 * 60 * 60 * 1000));
 
             // No timezone conversion needed - keep UTC
             const helperId = req.user.id || req.user.phone; // Lấy ID của helper hiện tại
@@ -538,22 +399,9 @@ const requestController ={
                     const filteredSchedules = allSchedules.filter(schedule => {
                         // Chỉ hiển thị RequestDetail chưa được gán helper (status = pending, helper_id = null) 
                         // và thời gian bắt đầu cách hiện tại <= 2h (tính theo UTC)
-                        if (schedule.status === 'pending' && schedule.helper_id=="notAvailable" && schedule.startTime ) {                            
-                            // Phân tích ngày tháng
-                            const scheduleDate = schedule.startTime.toISOString().split('T')[0];
-                            const currentDate = currentTime.toISOString().split('T')[0];
-                            console.log(`Schedule date: ${scheduleDate}, Current date: ${currentDate}`);
-                            
+                        if (schedule.status === 'pending' && schedule.helper_id=="notAvailable" && schedule.startTime ) {
                             // Tính chênh lệch thời gian bằng milliseconds, sau đó chuyển sang phút
                             const timeDiffMinutes = (schedule.startTime.getTime() - currentTime.getTime()) / (1000 * 60);
-                            console.log(`Thời gian chênh lệch (phút): ${timeDiffMinutes}`);
-                            
-                            // Debug thời gian theo múi giờ Việt Nam để dễ hiểu
-                            const vietnamOffset = 7 * 60 * 60 * 1000; // 7 giờ tính bằng milliseconds
-                            const vnScheduleTime = new Date(schedule.startTime.getTime() + vietnamOffset);
-                            const vnCurrentTime = new Date(currentTime.getTime() + vietnamOffset);
-                            console.log(`VN schedule time: ${vnScheduleTime.toLocaleString('vi-VN')}`);
-                            console.log(`VN current time: ${vnCurrentTime.toLocaleString('vi-VN')}`);
                             
                             // Chỉ hiển thị nếu thời gian bắt đầu cách hiện tại tối đa 120 phút (2 giờ)
                             // và là trong tương lai (>= 0)
@@ -1005,91 +853,7 @@ const requestController ={
                 message: "Không thể tính toán chi phí"
             });
         }
-    },
-
-    // Utility method to fix inconsistent datetime data in database
-    fixDateTimeInconsistencies: async (req, res, next) => {
-        try {
-            // Find all RequestDetail records
-            const allSchedules = await RequestDetail.find({});
-            const fixedSchedules = [];
-            const issuesFound = [];
-            
-            for (const schedule of allSchedules) {
-                const original = {
-                    id: schedule._id.toString(),
-                    startTime: schedule.startTime?.toISOString(),
-                    endTime: schedule.endTime?.toISOString(), 
-                    workingDate: schedule.workingDate?.toISOString()
-                };
-                
-                // Check for issues
-                let hasIssues = false;
-                const issues = [];
-                
-                if (schedule.startTime && schedule.workingDate) {
-                    const startTimeDate = schedule.startTime.toISOString().split('T')[0];
-                    const workingDateStr = schedule.workingDate.toISOString().split('T')[0];
-                    const workingDateTime = schedule.workingDate.toISOString().split('T')[1];
-                    
-                    if (startTimeDate !== workingDateStr) {
-                        hasIssues = true;
-                        issues.push('date_mismatch');
-                    }
-                    
-                    if (workingDateTime !== '00:00:00.000Z') {
-                        hasIssues = true;
-                        issues.push('working_date_not_midnight');
-                    }
-                }
-                
-                if (hasIssues) {
-                    // Fix the schedule
-                    const corrected = fixDateTimeConsistency(schedule);
-                    
-                    // Update in database
-                    await RequestDetail.findByIdAndUpdate(schedule._id, {
-                        startTime: corrected.startTime,
-                        endTime: corrected.endTime,
-                        workingDate: corrected.workingDate
-                    });
-                    
-                    fixedSchedules.push({
-                        id: schedule._id.toString(),
-                        issues,
-                        original,
-                        corrected: {
-                            startTime: corrected.startTime.toISOString(),
-                            endTime: corrected.endTime?.toISOString(),
-                            workingDate: corrected.workingDate.toISOString()
-                        }
-                    });
-                    
-                    issuesFound.push(...issues);
-                }
-            }
-            
-            res.status(200).json({
-                success: true,
-                message: `Fixed ${fixedSchedules.length} inconsistent records`,
-                summary: {
-                    totalRecords: allSchedules.length,
-                    fixedRecords: fixedSchedules.length,
-                    issueTypes: [...new Set(issuesFound)]
-                },
-                details: fixedSchedules
-            });
-            
-        } catch (error) {
-            res.status(500).json({
-                success: false,
-                message: "Error fixing datetime inconsistencies"
-            });
-        }
-    }
-    
-
-    
+    }    
 }
 
 module.exports = requestController;
