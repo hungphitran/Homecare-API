@@ -73,41 +73,127 @@ function fixDateTimeConsistency(schedule) {
         return schedule;
     }
     
-    // Fix workingDate to be at midnight if it's not
-    const workingDate = new Date(schedule.workingDate);
-    const workingDateStr = workingDate.toISOString().split('T')[0]; // Get just the date part
-    // Create a UTC-midnight Date (with 'Z') to ensure UTC storage
-    const correctedWorkingDate = new Date(`${workingDateStr}T00:00:00.000Z`);
-
-    const startTime = new Date(schedule.startTime);
-    const endTime = schedule.endTime ? new Date(schedule.endTime) : null;
-
-    // Use local hours/minutes (getHours/getMinutes) so we preserve the wall-clock time
-    const startHours = startTime.getHours().toString().padStart(2, '0');
-    const startMinutes = startTime.getMinutes().toString().padStart(2, '0');
-    const startTimeStr = `${startHours}:${startMinutes}`;
-
-    // Create corrected startTime with workingDate (with 'Z') to ensure UTC conversion
-    const correctedStartTime = new Date(`${workingDateStr}T${startTimeStr}:00.000Z`);
-
-    let correctedEndTime = null;
-    if (endTime) {
-        const endHours = endTime.getHours().toString().padStart(2, '0');
-        const endMinutes = endTime.getMinutes().toString().padStart(2, '0');
-        const endTimeStr = `${endHours}:${endMinutes}`;
-        correctedEndTime = new Date(`${workingDateStr}T${endTimeStr}:00.000Z`);
+    try {
+        console.log(`===== Debug fixDateTimeConsistency =====`);
+        console.log(`Original startTime: ${schedule.startTime}`);
+        console.log(`Original workingDate: ${schedule.workingDate}`);
+        
+        // Parse startTime string from the database format
+        // Get a clean Date object first, but it will be interpreted in local time zone
+        const startTime = new Date(schedule.startTime);
+        console.log(`Date object from startTime: ${startTime.toString()}`);
+        console.log(`Date toISOString: ${startTime.toISOString()}`);
+        
+        // Xác định múi giờ từ chuỗi thời gian (nếu có)
+        const startTimeString = schedule.startTime.toString();
+        let timezoneOffsetHours = 7; // Mặc định là múi giờ Việt Nam (GMT+7)
+        
+        // Try to extract timezone offset from the string if available
+        if (startTimeString.includes('GMT+')) {
+            const match = startTimeString.match(/GMT\+(\d+)/);
+            if (match && match[1]) {
+                timezoneOffsetHours = parseInt(match[1]);
+                console.log(`Detected timezone offset: GMT+${timezoneOffsetHours}`);
+            }
+        } else if (startTimeString.includes('GMT-')) {
+            const match = startTimeString.match(/GMT-(\d+)/);
+            if (match && match[1]) {
+                timezoneOffsetHours = -parseInt(match[1]);
+                console.log(`Detected timezone offset: GMT${timezoneOffsetHours}`);
+            }
+        } else {
+            console.log(`No timezone detected in string, using default GMT+7`);
+        }
+        
+        // Lấy giờ và phút từ đối tượng Date (theo giờ địa phương)
+        const localHours = startTime.getHours();
+        const localMinutes = startTime.getMinutes();
+        console.log(`Local time extracted: ${localHours}:${localMinutes}`);
+        
+        // Convert to UTC hours by subtracting the timezone offset
+        // Example: 17:00 GMT+7 becomes 10:00 UTC (17-7=10)
+        const utcHours = (localHours - timezoneOffsetHours + 24) % 24;
+        const utcMinutes = localMinutes;
+        console.log(`Calculated UTC time: ${utcHours}:${utcMinutes}`);
+        
+        // Format as padded strings
+        const startHours = utcHours.toString().padStart(2, '0');
+        const startMinutes = utcMinutes.toString().padStart(2, '0');
+        
+        // QUAN TRỌNG: Lấy ngày từ startTime chứ không phải workingDate
+        // Điều này đảm bảo chúng ta không mất thông tin về ngày
+        const startYear = startTime.getFullYear();
+        const startMonth = startTime.getMonth(); // 0-11
+        const startDay = startTime.getDate();
+        console.log(`Date parts from startTime: ${startYear}-${startMonth+1}-${startDay}`);
+        
+        // Tạo workingDate từ startTime nhưng đặt giờ về 00:00:00
+        const correctedWorkingDate = new Date(Date.UTC(startYear, startMonth, startDay, 0, 0, 0));
+        
+        // Tạo startTime UTC với giờ đã được chuyển đổi, giữ nguyên ngày từ startTime gốc
+        const correctedStartTime = new Date(Date.UTC(startYear, startMonth, startDay, parseInt(startHours), parseInt(startMinutes), 0));
+        
+        // Handle endTime if it exists
+        let correctedEndTime = null;
+        if (schedule.endTime) {
+            // Get a clean Date object for endTime
+            const endTime = new Date(schedule.endTime);
+            
+            // Calculate the UTC equivalent of the local endTime
+            const endTimeString = schedule.endTime.toString();
+            let timezoneOffsetHours = 7; // Mặc định là múi giờ Việt Nam (GMT+7)
+            
+            // Try to extract timezone offset from the string if available
+            if (endTimeString.includes('GMT+')) {
+                const match = endTimeString.match(/GMT\+(\d+)/);
+                if (match && match[1]) {
+                    timezoneOffsetHours = parseInt(match[1]);
+                }
+            } else if (endTimeString.includes('GMT-')) {
+                const match = endTimeString.match(/GMT-(\d+)/);
+                if (match && match[1]) {
+                    timezoneOffsetHours = -parseInt(match[1]);
+                }
+            }
+            
+            // Get local hours and minutes first
+            const localHours = endTime.getHours();
+            const localMinutes = endTime.getMinutes();
+            
+            // Convert to UTC hours by subtracting the timezone offset
+            const utcHours = (localHours - timezoneOffsetHours + 24) % 24;
+            const utcMinutes = localMinutes;
+            
+            // Format as padded strings
+            const endHours = utcHours.toString().padStart(2, '0');
+            const endMinutes = utcMinutes.toString().padStart(2, '0');
+            
+            // Sử dụng các biến startYear, startMonth, startDay để đảm bảo endTime cùng ngày với startTime
+            correctedEndTime = new Date(Date.UTC(startYear, startMonth, startDay, parseInt(endHours), parseInt(endMinutes), 0));
+            console.log(`End time in UTC: ${correctedEndTime.toISOString()}`);
+        }
+        
+        // Log kết quả cuối cùng
+        console.log(`Original start time: ${schedule.startTime}`); 
+        console.log(`Extracted date: ${startYear}-${startMonth+1}-${startDay}`);
+        console.log(`Corrected working date (UTC): ${correctedWorkingDate.toISOString()}`);
+        console.log(`Corrected start time (UTC): ${correctedStartTime.toISOString()}`);
+        
+        // Thời gian hiển thị theo múi giờ Việt Nam
+        const vnStartTime = new Date(correctedStartTime.getTime() + (7 * 60 * 60 * 1000));
+        console.log(`Vietnam start time: ${vnStartTime.toLocaleString('vi-VN')} (${vnStartTime.toISOString()})`);
+        console.log(`===== End Debug =====`);
+        
+        return {
+            ...schedule,
+            startTime: correctedStartTime,
+            endTime: correctedEndTime,
+            workingDate: correctedWorkingDate
+        };
+    } catch (error) {
+        console.error("Error in fixDateTimeConsistency:", error);
+        return schedule; // Return original schedule if there's an error
     }
-
-    // Compare by epoch to avoid string/UTC representation differences
-    const originalWorkingMidnight = new Date(workingDate.getFullYear(), workingDate.getMonth(), workingDate.getDate()).getTime();
-    const wasFixed = correctedStartTime.getTime() !== startTime.getTime() || correctedWorkingDate.getTime() !== originalWorkingMidnight;
-    
-    return {
-        ...schedule,
-        startTime: correctedStartTime,
-        endTime: correctedEndTime,
-        workingDate: correctedWorkingDate
-    };
 }
 
 async function calculateTotalCost (serviceTitle, startTime, endTime,workDate) {
@@ -429,31 +515,48 @@ const requestController ={
             const requests = await Request.find()
             .select('-__v -createdBy -updatedBy -deletedBy -deleted -profit -createdAt -updatedAt');
             
-            // Use UTC time consistently - no timezone conversion needed
-            let currentTime = new Date(); // Current UTC time
+            // Lấy thời gian hiện tại theo UTC
+            let currentTime = new Date();
+            
+            // Debug với thời gian Việt Nam
+            const vnTime = new Date(currentTime.getTime() + (7 * 60 * 60 * 1000));
+
             // No timezone conversion needed - keep UTC
             const helperId = req.user.id || req.user.phone; // Lấy ID của helper hiện tại
 
-            
             // Lấy schedules từ RequestDetail cho mỗi request với điều kiện lọc
             const requestsWithSchedules = await Promise.all(
                 requests.map(async (request) => {
                     const allSchedules = await RequestDetail.find({
-                        _id: { $in: request.scheduleIds }
-                    }).select('-__v -createdAt -updatedAt');
+                        _id: { $in: request.scheduleIds },
+                        //lấy startTime có ngày == ngày hiện tại 
+                        workingDate: { $gte: new Date(currentTime.toISOString().split('T')[0] + 'T00:00:00.000Z') }
+                    }).select('-__v -createdAt -updatedAt')
+                    .sort({ workingDate: 1 }); // Sắp xếp theo workingDate và startTime
                     
                     // Lọc schedules theo yêu cầu: chỉ hiển thị những requestDetail chưa có helper nào được gán
                     const filteredSchedules = allSchedules.filter(schedule => {
                         // Chỉ hiển thị RequestDetail chưa được gán helper (status = pending, helper_id = null) 
                         // và thời gian bắt đầu cách hiện tại <= 2h (tính theo UTC)
-                        
-                        if (schedule.status === 'pending' && !schedule.helper_id && schedule.startTime) {
-                            // Fix datetime consistency before E
-                            const correctedSchedule = fixDateTimeConsistency(schedule);
-                            const scheduleStartTime = new Date(correctedSchedule.startTime);
-                            const timeDiffMinutes = (scheduleStartTime.getTime() - currentTime) / (1000 * 60);
+                        if (schedule.status === 'pending' && schedule.helper_id=="notAvailable" && schedule.startTime ) {                            
+                            // Phân tích ngày tháng
+                            const scheduleDate = schedule.startTime.toISOString().split('T')[0];
+                            const currentDate = currentTime.toISOString().split('T')[0];
+                            console.log(`Schedule date: ${scheduleDate}, Current date: ${currentDate}`);
+                            
+                            // Tính chênh lệch thời gian bằng milliseconds, sau đó chuyển sang phút
+                            const timeDiffMinutes = (schedule.startTime.getTime() - currentTime.getTime()) / (1000 * 60);
+                            console.log(`Thời gian chênh lệch (phút): ${timeDiffMinutes}`);
+                            
+                            // Debug thời gian theo múi giờ Việt Nam để dễ hiểu
+                            const vietnamOffset = 7 * 60 * 60 * 1000; // 7 giờ tính bằng milliseconds
+                            const vnScheduleTime = new Date(schedule.startTime.getTime() + vietnamOffset);
+                            const vnCurrentTime = new Date(currentTime.getTime() + vietnamOffset);
+                            console.log(`VN schedule time: ${vnScheduleTime.toLocaleString('vi-VN')}`);
+                            console.log(`VN current time: ${vnCurrentTime.toLocaleString('vi-VN')}`);
                             
                             // Chỉ hiển thị nếu thời gian bắt đầu cách hiện tại tối đa 120 phút (2 giờ)
+                            // và là trong tương lai (>= 0)
                             return timeDiffMinutes >= 0 && timeDiffMinutes <= 120;
                         }
                         
