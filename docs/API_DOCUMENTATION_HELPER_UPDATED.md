@@ -26,8 +26,10 @@
 ```json
 {
   "message": "Đăng nhập thành công",
-  "token": "jwt_token_here",
-  "helper": {
+  "accessToken": "jwt_access_token_here",
+  "refreshToken": "jwt_refresh_token_here",
+  "user": {
+    "id": "helper_id_here",
     "phone": "0987654321",
     "fullName": "Trần Thị B",
     "role": "helper"
@@ -45,6 +47,33 @@
 {
   "currentPassword": "helper123",
   "newPassword": "newHelper456"
+}
+```
+
+**Response Success (200):**
+```json
+{
+  "message": "Đổi mật khẩu thành công"
+}
+```
+
+### 1.3 Refresh Token
+- **Endpoint**: `POST /auth/refresh`
+- **Description**: Làm mới access token bằng refresh token
+- **Authentication**: Không cần (sử dụng refresh token)
+
+**Request Body:**
+```json
+{
+  "refreshToken": "jwt_refresh_token_here"
+}
+```
+
+**Response Success (200):**
+```json
+{
+  "accessToken": "new_jwt_access_token_here",
+  "refreshToken": "new_jwt_refresh_token_here"
 }
 ```
 
@@ -140,7 +169,7 @@
 - API này chỉ hiển thị các schedule mà helper_id khớp với ID của helper đang đăng nhập
 - Thời gian cũng được chuyển đổi sang múi giờ Việt Nam (UTC+7)
 
-### 2.3 Nhận đơn hàng
+### 2.3 Nhận đơn hàng (Assign)
 - **Endpoint**: `POST /request/assign`
 - **Description**: Nhận (assign) một requestDetail cụ thể vào tài khoản helper hiện tại
 - **Authentication**: Bắt buộc (helper only)
@@ -148,28 +177,43 @@
 **Request Body:**
 ```json
 {
-  "detailId": "requestDetail_id"
+  "detailId": "requestDetail_id_here"
 }
 ```
+
+**Validation Rules:**
+- `detailId`: Bắt buộc, ID của requestDetail cần nhận
+- RequestDetail phải có status = "pending" 
+- Helper_id phải là "notAvailable"
+- Thời gian bắt đầu công việc phải trong khoảng từ hiện tại đến 2 giờ sau
 
 **Response Success (200):**
 ```json
 {
   "message": "Successfully assigned to requestDetail",
   "requestDetail": {
-    "_id": "requestDetail_id",
-    "helper_id": "helper_id",
+    "_id": "requestDetail_id_here",
+    "helper_id": "helper_id_here",
     "status": "assigned"
+  },
+  "notification": {
+    "sent": true,
+    "message": "Notification sent successfully"
   }
 }
 ```
 
-**Lưu ý:**
-- API này chỉ chấp nhận RequestDetail có status = "pending"
-- Chỉ các RequestDetail có thời gian bắt đầu trong khoảng từ hiện tại đến 2 giờ sau mới được chấp nhận
-- Helper_id sẽ được cập nhật từ "notAvailable" thành ID của helper đang đăng nhập
+**Response Errors:**
+- `400`: Work time is not within 2 hours window
+- `500`: RequestDetail is not available for assignment
+- `500`: Cannot find requestDetail
 
-### 2.3 Bắt đầu làm việc
+**Lưu ý:**
+- API này chuyển trạng thái RequestDetail từ "pending" -> "assigned"
+- Helper_id sẽ được cập nhật từ "notAvailable" thành ID của helper đang đăng nhập
+- Hệ thống sẽ gửi thông báo cho customer khi có helper nhận đơn
+
+### 2.4 Bắt đầu làm việc  
 - **Endpoint**: `POST /request/processing`
 - **Description**: Đánh dấu bắt đầu thực hiện công việc (chuyển trạng thái từ assigned -> inProgress)
 - **Authentication**: Bắt buộc (helper only)
@@ -177,19 +221,27 @@
 **Request Body:**
 ```json
 {
-  "detailId": "schedule_id"
+  "detailId": "requestDetail_id_here"
 }
 ```
+
+**Validation Rules:**
+- `detailId`: Bắt buộc, ID của requestDetail cần bắt đầu
+- RequestDetail phải có status = "assigned"
 
 **Response Success (200):**
 ```json
 {
-  "message": "Đã bắt đầu thực hiện công việc",
-  "status": "inProgress"
+  "message": "Đã bắt đầu thực hiện công việc"
 }
 ```
 
-### 2.4 Hoàn thành công việc
+**Lưu ý:**
+- Chuyển trạng thái RequestDetail từ "assigned" -> "inProgress"
+- Nếu Request cha đang có status = "pending", sẽ được chuyển thành "inProgress"
+- Hệ thống sẽ gửi thông báo cho customer khi helper bắt đầu làm việc
+
+### 2.5 Hoàn thành công việc
 - **Endpoint**: `POST /request/finish`
 - **Description**: Đánh dấu hoàn thành công việc (chuyển trạng thái từ inProgress -> waitPayment)
 - **Authentication**: Bắt buộc (helper only)
@@ -197,7 +249,7 @@
 **Request Body:**
 ```json
 {
-  "detailId": "schedule_id",
+  "detailId": "requestDetail_id_here",
   "comment": {
     "review": "Đã hoàn thành tốt công việc",
     "loseThings": false,
@@ -206,15 +258,24 @@
 }
 ```
 
+**Validation Rules:**
+- `detailId`: Bắt buộc, ID của requestDetail cần hoàn thành
+- RequestDetail phải có status = "inProgress"
+- `comment`: Không bắt buộc, thông tin bổ sung về công việc
+
 **Response Success (200):**
 ```json
 {
-  "message": "Đã hoàn thành công việc, chờ thanh toán",
-  "status": "waitPayment"
+  "message": "Đã hoàn thành công việc, chờ thanh toán"
 }
 ```
 
-### 2.5 Xác nhận thanh toán
+**Lưu ý:**
+- Chuyển trạng thái RequestDetail từ "inProgress" -> "waitPayment"
+- Nếu tất cả RequestDetail của Request cha đều ở trạng thái "waitPayment", "completed", hoặc "cancelled", Request sẽ chuyển thành "waitPayment"
+- Hệ thống sẽ gửi thông báo cho customer khi helper hoàn thành công việc
+
+### 2.6 Xác nhận thanh toán
 - **Endpoint**: `POST /request/finishpayment`
 - **Description**: Xác nhận đã nhận thanh toán (chuyển trạng thái từ waitPayment -> completed)
 - **Authentication**: Bắt buộc (helper only)
@@ -222,58 +283,33 @@
 **Request Body:**
 ```json
 {
-  "detailId": "schedule_id"
-}
-```
-
-**Response Success (200):**
-```json
-{
-  "message": "Đã xác nhận thanh toán",
-  "status": "completed"
-}
-```
-
-## 3. Time Off APIs (Quản lý thời gian nghỉ)
-
-### 3.1 Đăng ký thời gian nghỉ
-- **Endpoint**: `POST /timeOff`
-- **Description**: Đăng ký thời gian không làm việc
-- **Authentication**: Bắt buộc (helper only)
-
-**Request Body:**
-```json
-{
-  "startDate": "2025-09-01",
-  "endDate": "2025-09-05",
-  "reason": "Nghỉ phép cá nhân"
+  "detailId": "requestDetail_id_here"
 }
 ```
 
 **Validation Rules:**
-- `startDate`: Bắt buộc, định dạng YYYY-MM-DD
-- `endDate`: Bắt buộc, định dạng YYYY-MM-DD, phải >= startDate
-- `reason`: Bắt buộc, lý do nghỉ
+- `detailId`: Bắt buộc, ID của requestDetail cần xác nhận thanh toán
+- RequestDetail phải có status = "waitPayment"
 
 **Response Success (200):**
 ```json
 {
-  "message": "Đăng ký nghỉ thành công",
-  "timeOff": {
-    "_id": "timeOff_id",
-    "helper_id": "helper_id",
-    "startDate": "2025-09-01T00:00:00.000Z",
-    "endDate": "2025-09-05T00:00:00.000Z",
-    "reason": "Nghỉ phép cá nhân",
-    "status": "pending"
-  }
+  "message": "Đã xác nhận thanh toán"
 }
 ```
 
-### 3.2 Lấy danh sách thời gian nghỉ
-- **Endpoint**: `GET /timeOff/my`
-- **Description**: Lấy danh sách thời gian nghỉ của helper hiện tại
-- **Authentication**: Bắt buộc (helper only)
+**Lưu ý:**
+- Chuyển trạng thái RequestDetail từ "waitPayment" -> "completed"
+- Nếu tất cả RequestDetail của Request cha đều có status = "completed", Request sẽ chuyển thành "completed"
+- Hệ thống sẽ gửi thông báo cho customer khi helper xác nhận đã nhận thanh toán
+- Đây là bước cuối cùng trong quy trình xử lý đơn hàng
+
+## 3. Time Off APIs (Quản lý thời gian nghỉ)
+
+### 3.1 Lấy danh sách thời gian nghỉ
+- **Endpoint**: `GET /timeOff/{helper_id}`
+- **Description**: Lấy danh sách thời gian nghỉ của helper theo ID
+- **Authentication**: Bắt buộc
 
 **Response Success (200):**
 ```json
@@ -289,16 +325,6 @@
 ]
 ```
 
-### 3.3 Hủy đăng ký thời gian nghỉ
-- **Endpoint**: `DELETE /timeOff/{id}`
-- **Description**: Hủy đăng ký thời gian nghỉ
-- **Authentication**: Bắt buộc (helper only)
-
-**Response Success (200):**
-```json
-{
-  "message": "Hủy đăng ký nghỉ thành công"
-}
-```
+**Lưu ý:** API này hiện tại chỉ hỗ trợ lấy danh sách thời gian nghỉ, chưa hỗ trợ tạo mới hoặc cập nhật.
 
 **Lưu ý:** Chỉ có thể hủy những đăng ký nghỉ có status = "pending"

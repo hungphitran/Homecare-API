@@ -20,21 +20,35 @@
   "phone": "0901234567",
   "password": "customer123",
   "fullName": "Nguyễn Văn A",
-  "email": "example@gmail.com"
+  "email": "example@gmail.com",
+  "address": {
+    "province": "province_id_here",
+    "district": "district_id_here", 
+    "ward": "ward_id_here",
+    "detailAddress": "Số 123, Đường ABC"
+  }
 }
 ```
 
 **Validation Rules:**
-- `phone`: Bắt buộc, là số điện thoại Việt Nam (10 số)
+- `phone`: Bắt buộc, số điện thoại (phải duy nhất)
 - `password`: Bắt buộc, tối thiểu 6 ký tự
-- `fullName`: Bắt buộc
+- `fullName`: Bắt buộc, họ tên đầy đủ
 - `email`: Không bắt buộc, nhưng phải đúng định dạng email nếu có
+- `address`: Bắt buộc, thông tin địa chỉ đầy đủ
+  - `province`: Bắt buộc, ID tỉnh/thành phố
+  - `district`: Bắt buộc, ID quận/huyện
+  - `ward`: Bắt buộc, ID phường/xã
+  - `detailAddress`: Bắt buộc, địa chỉ chi tiết
 
 **Response Success (201):**
 ```json
 {
   "message": "Đăng ký thành công",
-  "customer": {
+  "accessToken": "jwt_access_token_here",
+  "refreshToken": "jwt_refresh_token_here", 
+  "user": {
+    "id": "customer_id_here",
     "phone": "0901234567",
     "fullName": "Nguyễn Văn A",
     "email": "example@gmail.com",
@@ -60,8 +74,10 @@
 ```json
 {
   "message": "Đăng nhập thành công",
-  "token": "jwt_token_here",
-  "customer": {
+  "accessToken": "jwt_access_token_here",
+  "refreshToken": "jwt_refresh_token_here",
+  "user": {
+    "id": "customer_id_here",
     "phone": "0901234567",
     "fullName": "Nguyễn Văn A",
     "email": "example@gmail.com",
@@ -90,114 +106,202 @@
 }
 ```
 
+### 1.4 Refresh Token
+- **Endpoint**: `POST /auth/refresh`
+- **Description**: Làm mới access token bằng refresh token
+- **Authentication**: Không cần (sử dụng refresh token)
+
+**Request Body:**
+```json
+{
+  "refreshToken": "jwt_refresh_token_here"
+}
+```
+
+**Response Success (200):**
+```json
+{
+  "accessToken": "new_jwt_access_token_here",
+  "refreshToken": "new_jwt_refresh_token_here"
+}
+```
+
 ## 2. Request Management APIs (Quản lý đơn hàng)
+
+### 2.0 Tính chi phí dịch vụ  
+- **Endpoint**: `POST /request/calculateCost`
+- **Description**: Tính toán chi phí dịch vụ dựa trên thời gian và ngày làm việc
+- **Authentication**: Không cần
+
+**Request Body:**
+```json
+{
+  "serviceTitle": "Dọn dẹp nhà cửa",
+  "startTime": "08:00",
+  "endTime": "12:00", 
+  "workDate": "2025-08-20"
+}
+```
+
+**Hoặc có thể sử dụng serviceId thay cho serviceTitle:**
+```json
+{
+  "serviceId": "service_id_or_title_here",
+  "startTime": "08:00",
+  "endTime": "12:00",
+  "workDate": "2025-08-20"
+}
+```
+
+**Validation Rules:**
+- `serviceTitle` hoặc `serviceId`: Bắt buộc, tên hoặc ID dịch vụ
+- `startTime`: Bắt buộc, thời gian bắt đầu (HH:mm hoặc ISO format)
+- `endTime`: Bắt buộc, thời gian kết thúc (HH:mm hoặc ISO format) 
+- `workDate`: Bắt buộc, ngày làm việc (YYYY-MM-DD)
+
+**Response Success (200):**
+```json
+{
+  "totalCost": 450000.00,
+  "servicePrice": 100000,
+  "HSDV": 1.2,
+  "HSovertime": 1.5,
+  "HScuoituan": 1.3,
+  "isWeekend": false,
+  "isHoliday": false,
+  "totalOvertimeHours": 1.0,
+  "totalNormalHours": 3.0,
+  "applicableWeekendCoefficient": 1.0,
+  "overtimeCost": 1.5,
+  "normalCost": 3.0
+}
+```
+
+**Lưu ý:**
+- API này không cần xác thực, có thể sử dụng để estimate chi phí trước khi đặt đơn
+- Hệ số weekend/holiday sẽ được áp dụng tự động dựa trên ngày làm việc
+- Chi phí overtime được tính cho giờ làm ngoài giờ hành chính
 
 ### 2.1 Tạo đơn hàng mới
 - **Endpoint**: `POST /request`
-- **Description**: Tạo đơn hàng mới với một hoặc nhiều lịch làm việc
+- **Description**: Tạo đơn hàng mới với thời gian làm việc
 - **Authentication**: Bắt buộc (customer only)
 
 **Request Body:**
 ```json
 {
-  "service_id": "service_id_here",
-  "schedules": [
-    {
-      "workingDate": "2025-08-20",
-      "startTime": "08:00",
-      "endTime": "12:00"
-    },
-    {
-      "workingDate": "2025-08-21",
-      "startTime": "13:00",
-      "endTime": "17:00"
-    }
-  ],
-  "addressDetail": "Số 123, Đường ABC, Quận XYZ",
-  "location_id": "location_id_here",
-  "note": "Mang theo dụng cụ làm vệ sinh",
-  "paymentMethod": "cash"
+  "customerInfo": {
+    "phone": "0901234567",
+    "fullName": "Nguyễn Văn A",
+    "address": "Số 123, Đường ABC, Quận XYZ",
+    "usedPoint": 0
+  },
+  "service": {
+    "title": "Dọn dẹp nhà cửa"
+  },
+  "startTime": "08:00",
+  "endTime": "12:00",
+  "startDate": "2025-08-20",
+  "totalCost": 450000
 }
 ```
 
 **Validation Rules:**
-- `service_id`: Bắt buộc, ID của dịch vụ
-- `schedules`: Bắt buộc, mảng chứa ít nhất 1 lịch làm việc
-  - `workingDate`: Bắt buộc, định dạng YYYY-MM-DD
-  - `startTime`: Bắt buộc, định dạng HH:MM, giờ bắt đầu làm việc
-  - `endTime`: Bắt buộc, định dạng HH:MM, giờ kết thúc làm việc
-- `addressDetail`: Bắt buộc, địa chỉ chi tiết
-- `location_id`: Bắt buộc, ID của khu vực (location)
-- `note`: Không bắt buộc, ghi chú thêm cho đơn hàng
-- `paymentMethod`: Bắt buộc, phương thức thanh toán ("cash", "vnpay", "momo")
+- `customerInfo`: Bắt buộc, thông tin khách hàng
+  - `phone`: Bắt buộc, số điện thoại khách hàng
+  - `fullName`: Bắt buộc, họ tên đầy đủ
+  - `address`: Bắt buộc, địa chỉ chi tiết
+  - `usedPoint`: Không bắt buộc, điểm tích lũy sử dụng (mặc định: 0)
+- `service`: Bắt buộc, thông tin dịch vụ
+  - `title`: Bắt buộc, tên dịch vụ (phải tồn tại trong hệ thống)
+- `startTime`: Bắt buộc, thời gian bắt đầu (định dạng HH:mm hoặc ISO)
+- `endTime`: Bắt buộc, thời gian kết thúc (định dạng HH:mm hoặc ISO)
+- `startDate`: Bắt buộc, ngày làm việc (định dạng YYYY-MM-DD)
+- `totalCost`: Bắt buộc, tổng chi phí dịch vụ
 
 **Response Success (201):**
 ```json
 {
-  "message": "Tạo đơn hàng thành công",
-  "request": {
+  "success": true,
+  "message": "Order created successfully",
+  "order": {
     "_id": "request_id_here",
-    "customer_id": "customer_id",
-    "service_id": "service_id_here",
-    "status": "pending",
+    "customerInfo": {
+      "phone": "0901234567",
+      "fullName": "Nguyễn Văn A",
+      "address": "Số 123, Đường ABC, Quận XYZ",
+      "usedPoint": 0
+    },
+    "service": {
+      "title": "Dọn dẹp nhà cửa"
+    },
+    "startTime": "2025-08-20T08:00:00.000Z",
+    "endTime": "2025-08-20T12:00:00.000Z",
+    "orderDate": "2025-08-20T00:00:00.000Z",
+    "scheduleIds": ["requestDetail_id_1"],
     "totalCost": 450000,
-    "schedules": [
-      {
-        "_id": "requestDetail_id_1",
-        "workingDate": "2025-08-20",
-        "startTime": "2025-08-20T01:00:00.000Z",
-        "endTime": "2025-08-20T05:00:00.000Z",
-        "helper_id": "notAvailable",
-        "cost": 250000,
-        "status": "pending",
-        "helper_cost": 180000
-      },
-      {
-        "_id": "requestDetail_id_2",
-        "workingDate": "2025-08-21",
-        "startTime": "2025-08-21T06:00:00.000Z",
-        "endTime": "2025-08-21T10:00:00.000Z",
-        "helper_id": "notAvailable",
-        "cost": 200000,
-        "status": "pending",
-        "helper_cost": 150000
-      }
-    ],
-    "addressDetail": "Số 123, Đường ABC, Quận XYZ",
-    "location_id": "location_id_here",
-    "note": "Mang theo dụng cụ làm vệ sinh",
-    "paymentMethod": "cash"
-  }
+    "helper_cost": 0,
+    "status": "pending"
+  },
+  "costBreakdown": {
+    "totalServiceCost": 450000,
+    "workingDates": 1,
+    "schedules": 1
+  },
+  "note": "Helper will be assigned later through assign endpoint"
 }
 ```
 
 **Lưu ý:**
-- Thời gian đặt hàng (orderDate) được tự động gán là ngày hiện tại
-- Tất cả startTime và endTime được chuyển đổi sang UTC khi lưu vào database
-- Giá tiền (cost, totalCost, helper_cost) được tính toán tự động dựa trên service và thời gian làm việc
+- Thời gian đặt hàng (orderDate) được tự động gán từ startDate hoặc ngày hiện tại
+- Tất cả thời gian được lưu dưới dạng UTC trong database
+- Mặc định không có helper khi tạo đơn (helper_id = "notAvailable")
+- Helper sẽ được gán sau thông qua endpoint assign
+- Chi phí helper (helper_cost) ban đầu là 0
 
 ### 2.2 Lấy danh sách đơn hàng của khách hàng
-- **Endpoint**: `GET /request/my`
-- **Description**: Lấy danh sách tất cả đơn hàng của khách hàng hiện tại
-- **Authentication**: Bắt buộc (customer only)
-
-**Query Parameters:**
-- `status`: Không bắt buộc, lọc theo trạng thái đơn hàng
-- `page`: Không bắt buộc, số trang (mặc định: 1)
-- `limit`: Không bắt buộc, số lượng kết quả mỗi trang (mặc định: 10)
+- **Endpoint**: `GET /request/{phone}`
+- **Description**: Lấy danh sách tất cả đơn hàng của khách hàng theo số điện thoại
+- **Authentication**: Bắt buộc (customer only, chỉ được xem đơn hàng của chính mình)
 
 **Response Success (200):**
 ```json
-{
-  "requests": [
-    {
-      "_id": "request_id",
-      "service": {
-        "title": "Dọn dẹp nhà cửa"
-      },
-      "totalCost": 450000,
-      "orderDate": "2025-08-19",
-      "startTime": "2025-08-20T08:00:00.000Z",
+[
+  {
+    "_id": "request_id",
+    "customerInfo": {
+      "phone": "0901234567",
+      "fullName": "Nguyễn Văn A",
+      "address": "Số 123, Đường ABC, Quận XYZ"
+    },
+    "service": {
+      "title": "Dọn dẹp nhà cửa"
+    },
+    "totalCost": 450000,
+    "orderDate": "2025-08-19",
+    "startTime": "2025-08-20T08:00:00.000Z",
+    "endTime": "2025-08-20T12:00:00.000Z",
+    "status": "pending",
+    "schedules": [
+      {
+        "_id": "requestDetail_id_1",
+        "startTime": "2025-08-20T08:00:00.000Z",
+        "endTime": "2025-08-20T12:00:00.000Z",
+        "workingDate": "2025-08-20",
+        "helper_id": "notAvailable",
+        "cost": 450000,
+        "status": "pending",
+        "helper_cost": 0
+      }
+    ]
+  }
+]
+```
+
+**Lưu ý:**
+- Trả về tất cả thông tin đơn hàng và lịch làm việc (schedules) tương ứng
+- Thời gian được chuyển đổi sang múi giờ Việt Nam (UTC+7) để hiển thị
+- Chỉ customer được phép xem đơn hàng của chính mình (kiểm tra quyền sở hữu)
       "endTime": "2025-08-21T17:00:00.000Z",
       "status": "pending",
       "addressDetail": "Số 123, Đường ABC, Quận XYZ",
@@ -295,76 +399,40 @@
 
 **Lưu ý:** Tất cả thời gian trả về cho client đều đã được chuyển đổi sang múi giờ Việt Nam (UTC+7)
 
-### 2.4 Hủy đơn hàng
+### 2.3 Hủy đơn hàng
 - **Endpoint**: `POST /request/cancel`
-- **Description**: Hủy một đơn hàng
+- **Description**: Hủy một đơn hàng của khách hàng
 - **Authentication**: Bắt buộc (customer only)
 
 **Request Body:**
 ```json
 {
-  "request_id": "request_id_here",
-  "reason": "Thay đổi lịch trình cá nhân"
+  "id": "request_id_here"
 }
 ```
 
 **Validation Rules:**
-- `request_id`: Bắt buộc, ID của đơn hàng cần hủy
-- `reason`: Bắt buộc, lý do hủy đơn
+- `id`: Bắt buộc, ID của đơn hàng cần hủy
+- Chỉ có thể hủy đơn hàng có status = "pending" hoặc các requestDetail có status = "pending" hoặc "assigned"
 
 **Response Success (200):**
 ```json
 {
-  "message": "Hủy đơn hàng thành công",
-  "request": {
-    "_id": "request_id_here",
-    "status": "cancelled",
-    "cancelReason": "Thay đổi lịch trình cá nhân"
-  }
+  "message": "Đơn hàng đã được hủy thành công"
 }
 ```
 
-**Lưu ý:** Chỉ có thể hủy đơn hàng có trạng thái là "pending" hoặc đơn hàng có các requestDetail có trạng thái là "pending".
-
-### 2.5 Đánh giá đơn hàng
-- **Endpoint**: `POST /request/review`
-- **Description**: Đánh giá đơn hàng sau khi hoàn thành
-- **Authentication**: Bắt buộc (customer only)
-
-**Request Body:**
-```json
-{
-  "detailId": "requestDetail_id",
-  "rating": 5,
-  "comment": "Dịch vụ rất tốt, helper làm việc chuyên nghiệp"
-}
-```
-
-**Validation Rules:**
-- `detailId`: Bắt buộc, ID của requestDetail cần đánh giá
-- `rating`: Bắt buộc, điểm đánh giá (1-5)
-- `comment`: Không bắt buộc, nhận xét của khách hàng
-
-**Response Success (200):**
-```json
-{
-  "message": "Đánh giá thành công",
-  "review": {
-    "detailId": "requestDetail_id",
-    "rating": 5,
-    "comment": "Dịch vụ rất tốt, helper làm việc chuyên nghiệp"
-  }
-}
-```
-
-**Lưu ý:** Chỉ có thể đánh giá RequestDetail có trạng thái là "completed"
+**Lưu ý:** 
+- Customer chỉ có thể hủy đơn hàng của chính mình
+- Không thể hủy đơn hàng đã bắt đầu làm việc (status = "inProgress") hoặc đã hoàn thành
+- Khi hủy đơn hàng, tất cả các requestDetail liên quan cũng sẽ được hủy
 
 ## 3. Service APIs (Quản lý dịch vụ)
 
 ### 3.1 Lấy danh sách dịch vụ
 - **Endpoint**: `GET /service`
 - **Description**: Lấy danh sách tất cả dịch vụ có sẵn
-- **Authentication**: Không bắt buộc
+- **Authentication**: Không cần
 
 **Response Success (200):**
 ```json
@@ -372,40 +440,33 @@
   {
     "_id": "service_id_1",
     "title": "Dọn dẹp nhà cửa",
-    "description": "Dọn dẹp, lau chùi nhà cửa",
-    "price": 100000,
-    "priceUnit": "giờ",
-    "imagePath": "url_to_image",
+    "basicPrice": 100000,
+    "coefficient_id": "coefficient_id_here",
     "isActive": true
   },
   {
-    "_id": "service_id_2",
+    "_id": "service_id_2", 
     "title": "Nấu ăn gia đình",
-    "description": "Chuẩn bị và nấu ăn theo yêu cầu",
-    "price": 120000,
-    "priceUnit": "giờ",
-    "imagePath": "url_to_image",
+    "basicPrice": 120000,
+    "coefficient_id": "coefficient_id_here",
     "isActive": true
   }
 ]
 ```
 
 ### 3.2 Lấy chi tiết dịch vụ
-- **Endpoint**: `GET /service/{id}`
-- **Description**: Lấy thông tin chi tiết của một dịch vụ
-- **Authentication**: Không bắt buộc
+- **Endpoint**: `GET /service/{idOrTitle}`
+- **Description**: Lấy thông tin chi tiết của một dịch vụ theo ID hoặc title
+- **Authentication**: Không cần
 
 **Response Success (200):**
 ```json
 {
   "_id": "service_id_1",
-  "title": "Dọn dẹp nhà cửa",
-  "description": "Dọn dẹp, lau chùi nhà cửa",
-  "price": 100000,
-  "priceUnit": "giờ",
-  "imagePath": "url_to_image",
-  "isActive": true,
-  "details": "Chi tiết dịch vụ dọn dẹp nhà cửa bao gồm quét, lau chùi, dọn dẹp bề mặt..."
+  "title": "Dọn dẹp nhà cửa", 
+  "basicPrice": 100000,
+  "coefficient_id": "coefficient_id_here",
+  "isActive": true
 }
 ```
 
@@ -413,21 +474,27 @@
 
 ### 4.1 Lấy danh sách khu vực
 - **Endpoint**: `GET /location`
-- **Description**: Lấy danh sách tất cả khu vực hỗ trợ
-- **Authentication**: Không bắt buộc
+- **Description**: Lấy cấu trúc địa chỉ hành chính (tỉnh/thành phố, quận/huyện, phường/xã)
+- **Authentication**: Không cần
 
 **Response Success (200):**
 ```json
 [
   {
-    "_id": "location_id_1",
-    "name": "Quận 1",
-    "isActive": true
-  },
-  {
-    "_id": "location_id_2",
-    "name": "Quận 2",
-    "isActive": true
+    "_id": "province_id_1",
+    "Name": "Thành phố Hồ Chí Minh",
+    "Districts": [
+      {
+        "_id": "district_id_1",
+        "Name": "Quận 1",
+        "Wards": [
+          {
+            "_id": "ward_id_1",
+            "Name": "Phường Bến Nghé"
+          }
+        ]
+      }
+    ]
   }
 ]
 ```
@@ -437,19 +504,21 @@
 ### 5.1 Đăng ký token thiết bị
 - **Endpoint**: `POST /notification/register`
 - **Description**: Đăng ký token thiết bị để nhận thông báo push
-- **Authentication**: Bắt buộc
+- **Authentication**: Không cần
 
 **Request Body:**
 ```json
 {
-  "deviceToken": "firebase_device_token_here",
+  "token": "firebase_device_token_here",
+  "phone": "0901234567",
   "deviceType": "android"
 }
 ```
 
 **Validation Rules:**
-- `deviceToken`: Bắt buộc, token thiết bị từ Firebase
-- `deviceType`: Bắt buộc, loại thiết bị ("android", "ios", "web")
+- `token`: Bắt buộc, token thiết bị từ Firebase
+- `phone`: Bắt buộc, số điện thoại người dùng  
+- `deviceType`: Không bắt buộc, loại thiết bị ("android", "ios", "web")
 
 **Response Success (200):**
 ```json
@@ -458,65 +527,53 @@
 }
 ```
 
-### 5.2 Lấy danh sách thông báo
-- **Endpoint**: `GET /notification/my`
-- **Description**: Lấy danh sách thông báo của người dùng hiện tại
-- **Authentication**: Bắt buộc
-
-**Query Parameters:**
-- `page`: Không bắt buộc, số trang (mặc định: 1)
-- `limit`: Không bắt buộc, số lượng kết quả mỗi trang (mặc định: 10)
+### 5.2 Kiểm tra trạng thái token
+- **Endpoint**: `GET /notification/check/{phone}`
+- **Description**: Kiểm tra trạng thái token của người dùng theo số điện thoại
+- **Authentication**: Không cần
 
 **Response Success (200):**
 ```json
 {
-  "notifications": [
+  "phone": "0901234567",
+  "tokens": [
     {
-      "_id": "notification_id_1",
-      "title": "Đơn hàng mới",
-      "body": "Đơn hàng #123456 đã được tạo thành công",
-      "data": {
-        "type": "new_order",
-        "request_id": "request_id_here"
-      },
-      "isRead": false,
+      "token": "firebase_token_here",
+      "deviceType": "android",
+      "isActive": true,
       "createdAt": "2025-08-19T08:30:00.000Z"
     }
-  ],
-  "pagination": {
-    "totalNotifications": 5,
-    "totalPages": 1,
-    "currentPage": 1,
-    "limit": 10
-  }
+  ]
 }
 ```
 
-### 5.3 Đánh dấu thông báo đã đọc
-- **Endpoint**: `POST /notification/read`
-- **Description**: Đánh dấu một hoặc nhiều thông báo đã đọc
-- **Authentication**: Bắt buộc
+### 5.3 Test notification
+- **Endpoint**: `POST /notification/test`  
+- **Description**: Gửi thông báo test để kiểm tra
+- **Authentication**: Không cần
 
 **Request Body:**
 ```json
 {
-  "notificationIds": ["notification_id_1", "notification_id_2"]
+  "phone": "0901234567",
+  "title": "Test notification",
+  "body": "This is a test notification"
 }
 ```
 
 **Response Success (200):**
 ```json
 {
-  "message": "Đánh dấu thông báo đã đọc thành công"
+  "message": "Test notification sent successfully"
 }
 ```
 
 ## 6. Profile APIs (Quản lý hồ sơ)
 
 ### 6.1 Lấy thông tin hồ sơ
-- **Endpoint**: `GET /customer/profile`
-- **Description**: Lấy thông tin hồ sơ của khách hàng hiện tại
-- **Authentication**: Bắt buộc (customer only)
+- **Endpoint**: `GET /customer/{phone}`
+- **Description**: Lấy thông tin hồ sơ của khách hàng theo số điện thoại
+- **Authentication**: Bắt buộc (customer only, chỉ được xem hồ sơ của chính mình)
 
 **Response Success (200):**
 ```json
@@ -525,39 +582,62 @@
   "phone": "0901234567",
   "fullName": "Nguyễn Văn A",
   "email": "example@gmail.com",
-  "role": "customer",
-  "defaultAddress": "Số 123, Đường ABC, Quận XYZ",
-  "defaultLocation_id": "location_id_here"
+  "signedUp": true,
+  "addresses": [
+    {
+      "_id": "address_id_1",
+      "province": "Thành phố Hồ Chí Minh",
+      "district": "Quận 1",
+      "ward": "Phường Bến Nghé",
+      "detailAddress": "Số 123, Đường ABC"
+    }
+  ]
 }
 ```
 
-### 6.2 Cập nhật hồ sơ
-- **Endpoint**: `PUT /customer/profile`
+### 6.2 Cập nhật hồ sơ  
+- **Endpoint**: `PATCH /customer/{phone}`
 - **Description**: Cập nhật thông tin hồ sơ của khách hàng
-- **Authentication**: Bắt buộc (customer only)
+- **Authentication**: Bắt buộc (customer only, chỉ được sửa hồ sơ của chính mình)
 
 **Request Body:**
 ```json
 {
   "fullName": "Nguyễn Văn A (Updated)",
   "email": "newemail@gmail.com",
-  "defaultAddress": "Số 456, Đường DEF, Quận XYZ",
-  "defaultLocation_id": "new_location_id"
+  "addresses": [
+    {
+      "province": "province_id_here", 
+      "district": "district_id_here",
+      "ward": "ward_id_here",
+      "detailAddress": "Số 456, Đường DEF"
+    }
+  ]
 }
 ```
 
 **Response Success (200):**
 ```json
 {
-  "message": "Cập nhật hồ sơ thành công",
+  "message": "Cập nhật thông tin thành công",
   "customer": {
     "_id": "customer_id",
-    "phone": "0901234567",
+    "phone": "0901234567", 
     "fullName": "Nguyễn Văn A (Updated)",
     "email": "newemail@gmail.com",
-    "role": "customer",
-    "defaultAddress": "Số 456, Đường DEF, Quận XYZ",
-    "defaultLocation_id": "new_location_id"
+    "addresses": [
+      {
+        "_id": "address_id_1",
+        "province": "Thành phố Hồ Chí Minh",
+        "district": "Quận 1", 
+        "ward": "Phường Bến Nghé",
+        "detailAddress": "Số 456, Đường DEF"
+      }
+    ]
   }
 }
 ```
+
+**Lưu ý:**
+- Địa chỉ được trả về với tên đầy đủ (đã map từ ID sang tên) 
+- Customer chỉ có thể xem và chỉnh sửa thông tin của chính mình

@@ -708,19 +708,38 @@ const requestController ={
         let detail = await RequestDetail.findOne({_id:detailId}) 
         .then(data=>data)
         .catch(err=>res.status(500).send(err))
+        
+        // lấy request  chứa detailId
+        let request = await Request.findOne({scheduleIds : new mongoose.Types.ObjectId(detailId)})
+        .populate("scheduleIds")
+        .then(data=>data)
+        .catch(err=>res.status(500).send(err))
 
         if(!detail){
             return res.status(500).send("can not find detail");        
         }
-        // Updated to accept assigned status (after helper assignment)
+        // Updated to accept assigned status (after helper assignment) (update both requestDetail and parent Request)
         if(detail.status==="assigned"){
             detail.status ="inProgress";
             await detail.save()
-            .then(()=>res.status(200).send("success"))
-            .catch(err => res.status(500).send(err) )
+            .catch(err => res.status(500).send(err));
+            // Update parent request status to inProgress if it was pending
+            if(request.status === "pending"){
+                const prev = request.status;
+                request.status = "inProgress";
+                await request.save();
+                try {
+                    if (prev !== request.status) {
+                        await notifyOrderStatusChange(request, request.status);
+                    }
+                } catch (e) {
+                    console.warn('Notify (startWork) failed:', e?.message || e);
+                }
+            }
+            return res.status(200).send("success");
         }
         else{
-            res.status(500).send("can not change status of detail") 
+            res.status(500).send("can not change status of detail")
         }
     },
     finishRequest: async (req,res,next)=>{
@@ -729,9 +748,12 @@ const requestController ={
         .then(data=>data)
         .catch(err=>res.status(500).send(err))
 
-        // let request  = await Request.findOne({scheduleIds : new mongoose.Types.ObjectId(detailId)}).populate("scheduleIds")
-        // .then(data=>data)
-        // .catch(err=>res.status(500).send(err))
+        let request  = await Request.findOne({scheduleIds : new mongoose.Types.ObjectId(detailId)})
+        .populate("scheduleIds")
+        .then(data=>data)
+        .catch(err=>res.status(500).send(err))
+
+        
 
         if(!detail){
             return res.status(500).send("can not find detail");        
@@ -739,6 +761,23 @@ const requestController ={
         if(detail.status==="inProgress"){
             detail.status ="waitPayment";
             await detail.save().catch(err => res.status(500).send(err));
+
+            // Update parent request status to waitPayment if all details are in waitPayment or completed
+            const details = await RequestDetail.find({ _id: { $in: request.scheduleIds } }).select('status');
+            const allWaitPaymentOrCompleted = details.every(d => ['waitPayment', 'completed','cancelled'].includes(d.status));
+            const prev = request.status;
+            if (allWaitPaymentOrCompleted && request.status !== 'waitPayment') {
+                request.status = 'waitPayment';
+                await request.save();
+                try {
+                    if (prev !== request.status) {
+                        await notifyOrderStatusChange(request, request.status);
+                    }
+                } catch (e) {
+                    console.warn('Notify (finishRequest) failed:', e?.message || e);
+                }
+            }
+
             return res.status(200).send("success");
         }
         else{
