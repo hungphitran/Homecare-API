@@ -644,8 +644,8 @@ const requestController ={
                 // Try alternative search methods
                 let requestWithObjectId = null;
                 try {
-                    const objectId = new mongoose.Types.ObjectId(detailId);
-                    requestWithObjectId = await Request.findOne({ scheduleIds: { $in: [objectId] } });
+                    // Let Mongoose handle ObjectId conversion
+                    requestWithObjectId = await Request.findOne({ scheduleIds: { $in: [detailId] } });
                     if (requestWithObjectId) {
                         request = requestWithObjectId;
                     }
@@ -709,8 +709,8 @@ const requestController ={
         .then(data=>data)
         .catch(err=>res.status(500).send(err))
         
-        // lấy request  chứa detailId
-        let request = await Request.findOne({scheduleIds : new mongoose.Types.ObjectId(detailId)})
+        // lấy request  chứa detailId - Let Mongoose handle ObjectId conversion
+        let request = await Request.findOne({scheduleIds : detailId})
         .populate("scheduleIds")
         .then(data=>data)
         .catch(err=>res.status(500).send(err))
@@ -748,7 +748,7 @@ const requestController ={
         .then(data=>data)
         .catch(err=>res.status(500).send(err))
 
-        let request  = await Request.findOne({scheduleIds : new mongoose.Types.ObjectId(detailId)})
+        let request  = await Request.findOne({scheduleIds : detailId})
         .populate("scheduleIds")
         .then(data=>data)
         .catch(err=>res.status(500).send(err))

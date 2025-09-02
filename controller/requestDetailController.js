@@ -8,7 +8,7 @@ const requestDetailController ={
         try {
             //separate query to ids list
             let ids = req.query.ids.split(',').map(id => {
-                if (mongoose.Types.ObjectId.isValid(id)) return mongoose.Types.ObjectId(id);
+                if (mongoose.Types.ObjectId.isValid(id)) return id; // Let Mongoose handle the conversion
                 return id;
             });
             //get all the requests which id in ids
@@ -25,8 +25,10 @@ const requestDetailController ={
             // req.params.id là helper_id (ObjectId hoặc string)
             // req.user.helper_id từ JWT payload
             let helperId = req.params.id;
-            if (mongoose.Types.ObjectId.isValid(helperId)) {
-                helperId = mongoose.Types.ObjectId(helperId);
+            
+            // Validate ObjectId format but let Mongoose handle conversion
+            if (!mongoose.Types.ObjectId.isValid(helperId)) {
+                return res.status(400).json({ error: 'Invalid helper ID format' });
             }
             if(req.user.role === 'helper' && helperId.toString() !== req.user.helper_id.toString()) {
                 return res.status(403).json({
