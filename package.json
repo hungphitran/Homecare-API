@@ -10,7 +10,10 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "check-passwords": "node scripts/checkPasswordInfo.js",
     "reset-passwords": "node scripts/resetPasswordsSafe.js",
-    "reset-passwords-force": "node scripts/resetPasswords.js"
+    "reset-passwords-force": "node scripts/resetPasswords.js",
+    "db:clear": "node scripts/clearAllData.js",
+    "db:seed": "node scripts/seedDatabase.js",
+    "db:reset": "node scripts/resetDatabase.js"
   },
   "keywords": ["homecare", "api", "nodejs", "mongodb", "jwt", "vercel"],
   "author": "tran phi hung",

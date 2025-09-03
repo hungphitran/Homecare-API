@@ -35,8 +35,7 @@ const helperSchema = new mongoose.Schema({
     educationLevel: String,
     height: Number,
     weight: Number,
-    status: String,
-    workingStatus: String,
+    status: String, // offline, online, working
     password: String,
     deleted: {
         type: Boolean,

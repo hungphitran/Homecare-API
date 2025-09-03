@@ -7,7 +7,6 @@ const serviceRouter = require('./service')
 const requestRouter = require('./request')
 const customerRouter = require('./customer');
 const requestDetailRouter = require('./requestDetail')
-const timeOffRouter = require('./timeOff')
 const costFactorRouter = require('./costFactor')
 const authRouter = require('./auth') // Thêm auth router
 const notificationRouter = require('./notification')
@@ -27,7 +26,6 @@ router.use('/service', serviceRouter);
 router.use('/location', locationRouter);
 router.use('/helper', helperRouter)
 router.use('/requestDetail', requestDetailRouter)
-router.use('/timeOff', timeOffRouter)
 router.use('/costFactor', costFactorRouter)
 router.use('/general', generalRouter);
 router.use('/policy', policyRouter);
