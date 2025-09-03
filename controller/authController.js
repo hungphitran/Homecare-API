@@ -45,7 +45,6 @@ const authController = {
                 password: hashedPassword,
                 fullName,
                 email,
-                signedUp: true,
                 addresses: [address] // Thêm địa chỉ đầu tiên
             });
 

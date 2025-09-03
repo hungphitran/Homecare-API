@@ -1,5 +1,5 @@
 const RequestDetail = require('../model/requestDetail.model')
-const GeneralSetting = require('../model/general.model')
+const GeneralSetting = require('../model/generalSetting.model')
 const moment = require("moment");
 const mongoose = require('mongoose')
 

@@ -2,9 +2,10 @@ const Request = require('../model/request.model')
 const RequestDetail= require('../model/requestDetail.model')
 const generalController = require('./generalController')
 const mongoose = require('mongoose');
-const GeneralSetting = require('../model/general.model')
+const GeneralSetting = require('../model/generalSetting.model')
 const Service = require('../model/service.model')
 const CostFactor = require('../model/costFactorType.model')
+const Helper = require('../model/helper.model')
 // Helper model không cần thiết khi tạo đơn hàng - helper sẽ được gán sau
 const dayjs = require('dayjs');
 const moment = require('moment');
@@ -445,7 +446,9 @@ const requestController ={
             // Chỉ trả về những request có ít nhất 1 schedule phù hợp
             const validRequests = requestsWithSchedules.filter(request => 
                 request.schedules && request.schedules.length > 0
-            );
+            )
+            
+
             
             res.status(200).json(validRequests);
         } catch (err) {
@@ -533,13 +536,15 @@ const requestController ={
         try {
             const requests = await Request.find({"customerInfo.phone":req.params.phone})
             .select('-__v -createdBy -updatedBy -deletedBy -deleted -profit -createdAt -updatedAt');
-            
+            //sắp xếp ngày đặt gần nhất lên đầu
+            requests.sort((a, b) => b.orderDate - a.orderDate);
             // Lấy schedules từ RequestDetail cho mỗi request
             const requestsWithSchedules = await Promise.all(
                 requests.map(async (request) => {
                     const schedules = await RequestDetail.find({
                         _id: { $in: request.scheduleIds }
                     }).select('-__v -createdAt -updatedAt');
+                    // sắp xếp ngày đặt gần nhất lên đầu
                     
                     // Convert UTC times to Vietnam time for response
                     const requestWithVietnamTime = {
@@ -654,6 +659,15 @@ const requestController ={
                 }
                 
                 if (!request) {
+                    
+                    //update status of helper is working
+                    let helper = await Helper.findOne({_id:detail.helper_id})
+                    if(helper){
+                        helper.status = "working"
+                        await helper.save()
+                        .catch(err=>console.warn("Cannot update helper status to working:", err))
+                    }
+
                     return res.status(200).json({
                         message: "Successfully assigned to requestDetail, but could not find parent request for notification",
                         requestDetail: {
@@ -754,6 +768,13 @@ const requestController ={
         .catch(err=>res.status(500).send(err))
 
         
+        //update status of helper is online
+        let helper = await Helper.findOne({_id:detail.helper_id})
+        if(helper){
+            helper.status = "online"
+            await helper.save()
+            .catch(err=>console.warn("Cannot update helper status to working:", err))
+        }
 
         if(!detail){
             return res.status(500).send("can not find detail");        

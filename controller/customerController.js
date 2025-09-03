@@ -84,26 +84,26 @@ const customerController ={
             return res.status(500).json({ error: 'Internal server error' });
         }
     },
-    getAll: async (req,res,next)=>{
-        try {
-            const data = await Customer.find({})
-                .select('-password -__v -deleted -createdBy -updatedBy -deletedBy')
-                .lean();
+    // getAll: async (req,res,next)=>{
+    //     try {
+    //         const data = await Customer.find({})
+    //             .select('-password -__v -deleted -createdBy -updatedBy -deletedBy')
+    //             .lean();
 
-            // Batch map: collect all addresses then map per customer using one province fetch per invocation inside helper
-            const result = await Promise.all(
-                data.map(async (c) => ({
-                    ...c,
-                    addresses: await mapAddressesWithLocationNames(c.addresses)
-                }))
-            );
+    //         // Batch map: collect all addresses then map per customer using one province fetch per invocation inside helper
+    //         const result = await Promise.all(
+    //             data.map(async (c) => ({
+    //                 ...c,
+    //                 addresses: await mapAddressesWithLocationNames(c.addresses)
+    //             }))
+    //         );
 
-            return res.status(200).json(result);
-        } catch (err) {
-            console.error('getAll customers error:', err);
-            return res.status(500).json({ error: 'Internal server error' });
-        }
-    },
+    //         return res.status(200).json(result);
+    //     } catch (err) {
+    //         console.error('getAll customers error:', err);
+    //         return res.status(500).json({ error: 'Internal server error' });
+    //     }
+    // },
     update: async(req,res,next)=>{
         try {
             const { phone } = req.params;

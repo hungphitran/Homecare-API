@@ -1,4 +1,4 @@
-const generalModel = require("../model/general.model")
+const generalModel = require("../model/generalSetting.model")
 
 const generalController = {
     getAll: async (req, res) => {
