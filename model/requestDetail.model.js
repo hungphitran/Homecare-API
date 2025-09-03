@@ -11,7 +11,7 @@ const requestDetailSchema = new mongoose.Schema({
         loseThings: { type: Boolean, default: false },
         breakThings: { type: Boolean, default: false }
     },
-    status: String, // notDone - assigned - processing - done - cancelled
+    status: String, // 
     helper_cost: Number
 }, {
     timestamps: true
