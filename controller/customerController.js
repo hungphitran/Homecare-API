@@ -107,6 +107,15 @@ const customerController ={
     update: async(req,res,next)=>{
         try {
             const { phone } = req.params;
+            
+            // Validate phone parameter
+            if (!phone || phone.trim() === '') {
+                return res.status(400).json({
+                    error: 'Invalid phone',
+                    message: 'Số điện thoại không hợp lệ'
+                });
+            }
+
             const updateData = { ...req.body };
 
             // Chỉ cho phép một số trường được cập nhật
@@ -126,13 +135,25 @@ const customerController ={
                 });
             }
 
-            // Validation email format nếu có
+            // Validation email format nếu có + check uniqueness
             if (sanitizedUpdate.email && sanitizedUpdate.email.trim() !== '') {
                 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
                 if (!emailRegex.test(sanitizedUpdate.email)) {
                     return res.status(400).json({
                         error: 'Invalid email format',
                         message: 'Email không đúng định dạng'
+                    });
+                }
+                
+                // Check email uniqueness (exclude current customer)
+                const existingEmail = await Customer.findOne({ 
+                    email: sanitizedUpdate.email.trim(), 
+                    phone: { $ne: phone } 
+                });
+                if (existingEmail) {
+                    return res.status(409).json({
+                        error: 'Email already exists',
+                        message: 'Email này đã được sử dụng bởi khách hàng khác'
                     });
                 }
             }
@@ -145,43 +166,65 @@ const customerController ={
                 });
             }
 
-            // Validation addresses + chuẩn hóa theo yêu cầu: thay thế phần tử đầu tiên bằng địa chỉ mới
-            let newAddressToApply = null;
+            // Validation addresses + chuẩn hóa - hỗ trợ cập nhật toàn bộ danh sách addresses
+            let newAddressesToApply = null;
             if (sanitizedUpdate.addresses !== undefined) {
                 const payload = sanitizedUpdate.addresses;
-                let addrObj = null;
+                let addressList = [];
 
                 if (Array.isArray(payload)) {
-                    // Nếu là mảng, chỉ lấy phần tử đầu tiên theo yêu cầu
-                    addrObj = payload[0];
+                    // Nếu là mảng, xử lý tất cả các phần tử
+                    addressList = payload;
                 } else if (payload && typeof payload === 'object') {
-                    addrObj = payload;
-                }
-
-                if (!addrObj || typeof addrObj !== 'object') {
+                    // Nếu là object đơn, chuyển thành mảng 1 phần tử
+                    addressList = [payload];
+                } else {
                     return res.status(400).json({
                         error: 'Invalid addresses',
-                        message: 'addresses phải là object địa chỉ hợp lệ hoặc mảng chứa object đầu tiên'
+                        message: 'addresses phải là object địa chỉ hợp lệ hoặc mảng các object địa chỉ'
                     });
                 }
 
-                const requiredAddrFields = ['province', 'district', 'ward', 'detailAddress'];
-                for (const f of requiredAddrFields) {
-                    if (!addrObj[f] || typeof addrObj[f] !== 'string' || addrObj[f].trim() === '') {
-                        return res.status(400).json({
-                            error: 'Invalid address field',
-                            message: `Trường địa chỉ "${f}" là bắt buộc và phải là chuỗi không rỗng`
-                        });
-                    }
+                if (addressList.length === 0) {
+                    return res.status(400).json({
+                        error: 'Empty addresses',
+                        message: 'Danh sách addresses không được rỗng'
+                    });
                 }
 
-                // Chuẩn hóa địa chỉ mới để áp dụng
-                newAddressToApply = {
-                    province: addrObj.province.trim(),
-                    district: addrObj.district.trim(),
-                    ward: addrObj.ward.trim(),
-                    detailAddress: addrObj.detailAddress.trim()
-                };
+                // Validate từng địa chỉ trong danh sách
+                const requiredAddrFields = ['province', 'district', 'ward', 'detailAddress'];
+                const validatedAddresses = [];
+
+                for (let i = 0; i < addressList.length; i++) {
+                    const addrObj = addressList[i];
+                    
+                    if (!addrObj || typeof addrObj !== 'object') {
+                        return res.status(400).json({
+                            error: 'Invalid address object',
+                            message: `Địa chỉ thứ ${i + 1} phải là object hợp lệ`
+                        });
+                    }
+
+                    for (const f of requiredAddrFields) {
+                        if (!addrObj[f] || typeof addrObj[f] !== 'string' || addrObj[f].trim() === '') {
+                            return res.status(400).json({
+                                error: 'Invalid address field',
+                                message: `Địa chỉ thứ ${i + 1}: Trường "${f}" là bắt buộc và phải là chuỗi không rỗng`
+                            });
+                        }
+                    }
+
+                    // Chuẩn hóa địa chỉ
+                    validatedAddresses.push({
+                        province: addrObj.province.trim(),
+                        district: addrObj.district.trim(),
+                        ward: addrObj.ward.trim(),
+                        detailAddress: addrObj.detailAddress.trim()
+                    });
+                }
+
+                newAddressesToApply = validatedAddresses;
             }
 
             // Kiểm tra customer tồn tại
@@ -195,13 +238,9 @@ const customerController ={
 
             // Chuẩn bị dữ liệu update
             const setData = { ...sanitizedUpdate };
-            if (newAddressToApply) {
-                // Lấy customer hiện tại để thay thế phần tử đầu trong addresses
-                const currentAddresses = Array.isArray(existingCustomer.addresses)
-                    ? existingCustomer.addresses
-                    : [];
-                const replaced = [newAddressToApply, ...currentAddresses.slice(1)];
-                setData.addresses = replaced;
+            if (newAddressesToApply) {
+                // Thay thế toàn bộ danh sách addresses bằng danh sách mới
+                setData.addresses = newAddressesToApply;
             }
 
             // Update customer
