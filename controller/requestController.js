@@ -460,17 +460,12 @@ const requestController ={
     getMyAssignedRequests: async (req,res,next)=>{
         try {
             const helperId = req.user.id || req.user.phone || req.user.helper_id; // Get helper ID from JWT token
-            
             // Find all requestDetails assigned to this helper
             const myRequestDetails = await RequestDetail.find({
                 helper_id: String(helperId),  // Ensure consistent string comparison
                 // Optional: Filter by status if needed
                 // status: { $in: ['assigned', 'inProgress', 'waitPayment'] }
             }).select('-__v -createdAt -updatedAt').lean();
-
-            if (!myRequestDetails.length) {
-                return res.status(200).json([]);
-            }
 
             // Extract all the request detail IDs
             const detailIds = myRequestDetails.map(detail => detail._id);
@@ -480,19 +475,15 @@ const requestController ={
                 scheduleIds: { $in: detailIds }
             }).select('-__v -createdBy -updatedBy -deletedBy -deleted -profit -createdAt -updatedAt').lean();
             
-            // Create a map for quick lookups
-            const requestMap = new Map(requests.map(req => [req._id.toString(), req]));
-
             // Optimize by grouping schedules by request ID
             const schedulesByRequestId = {};
             myRequestDetails.forEach(schedule => {
                 // Find which request this schedule belongs to
                 const request = requests.find(req => 
                     req.scheduleIds && req.scheduleIds.some(sid => 
-                        sid.toString() === schedule._id.toString()
+                        sid.toString() == schedule._id.toString()
                     )
                 );
-                
                 if (request) {
                     const requestId = request._id.toString();
                     if (!schedulesByRequestId[requestId]) {
