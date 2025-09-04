@@ -7,7 +7,9 @@ const requestSchema = new mongoose.Schema({
     },
     scheduleIds: {
         type: Array,
-        default: []
+        default: [
+            { type: mongoose.Schema.Types.ObjectId, ref: 'RequestDetail' }
+        ]
     },
     startTime: Date,
     endTime: Date,

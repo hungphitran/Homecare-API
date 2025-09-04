@@ -262,6 +262,9 @@
 - `detailId`: Bắt buộc, ID của requestDetail cần hoàn thành
 - RequestDetail phải có status = "inProgress"
 - `comment`: Không bắt buộc, thông tin bổ sung về công việc
+  - `review`: Không bắt buộc, nhận xét về công việc đã thực hiện (String)
+  - `loseThings`: Không bắt buộc, đánh dấu có mất đồ trong quá trình làm việc (Boolean, mặc định: false)
+  - `breakThings`: Không bắt buộc, đánh dấu có làm hỏng đồ trong quá trình làm việc (Boolean, mặc định: false)
 
 **Response Success (200):**
 ```json
@@ -274,6 +277,8 @@
 - Chuyển trạng thái RequestDetail từ "inProgress" -> "waitPayment"
 - Nếu tất cả RequestDetail của Request cha đều ở trạng thái "waitPayment", "completed", hoặc "cancelled", Request sẽ chuyển thành "waitPayment"
 - Hệ thống sẽ gửi thông báo cho customer khi helper hoàn thành công việc
+- Helper có thể để lại thông tin về tình trạng công việc trong comment (review, loseThings, breakThings)
+- Customer có thể xem và bổ sung đánh giá thông qua API riêng sau khi nhận dịch vụ
 
 ### 2.6 Xác nhận thanh toán
 - **Endpoint**: `POST /request/finishpayment`

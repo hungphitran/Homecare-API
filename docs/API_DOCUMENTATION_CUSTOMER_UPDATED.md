@@ -427,6 +427,118 @@
 - Không thể hủy đơn hàng đã bắt đầu làm việc (status = "inProgress") hoặc đã hoàn thành
 - Khi hủy đơn hàng, tất cả các requestDetail liên quan cũng sẽ được hủy
 
+### 2.4 Đánh giá dịch vụ
+- **Endpoint**: `POST /requestDetail/review`
+- **Description**: Đánh giá và nhận xét về chất lượng dịch vụ đã hoàn thành
+- **Authentication**: Bắt buộc (customer only)
+
+**Request Body:**
+```json
+{
+  "detailId": "requestDetail_id_here",
+  "comment": {
+    "review": "Dịch vụ rất tốt, helper làm việc chuyên nghiệp và tận tâm",
+    "loseThings": false,
+    "breakThings": false
+  }
+}
+```
+
+**Validation Rules:**
+- `detailId`: Bắt buộc, ID của requestDetail cần đánh giá (phải có định dạng ObjectId hợp lệ)
+- RequestDetail phải có status = "completed" (đã hoàn thành)
+- Chỉ customer đặt đơn mới có thể đánh giá requestDetail của đơn hàng đó
+- `comment`: Không bắt buộc, thông tin đánh giá chi tiết
+  - `review`: Không bắt buộc, nhận xét bằng văn bản (String)
+  - `loseThings`: Không bắt buộc, đánh dấu có mất đồ hay không (Boolean, mặc định: false)
+  - `breakThings`: Không bắt buộc, đánh dấu có làm hỏng đồ hay không (Boolean, mặc định: false)
+
+**Response Success (200):**
+```json
+{
+  "message": "Review updated successfully"
+}
+```
+
+**Response Error (400 - Missing required field):**
+```json
+{
+  "error": "Missing required field",
+  "message": "detailId là bắt buộc"
+}
+```
+
+**Response Error (400 - Invalid ObjectId format):**
+```json
+{
+  "error": "Invalid ObjectId format",
+  "message": "detailId phải có định dạng ObjectId hợp lệ"
+}
+```
+
+**Response Error (400 - Invalid status):**
+```json
+{
+  "error": "Invalid status",
+  "message": "Chỉ có thể đánh giá các đơn hàng đã hoàn thành"
+}
+```
+
+**Response Error (403 - Access denied):**
+```json
+{
+  "error": "Access denied",
+  "message": "Bạn chỉ có thể đánh giá đơn hàng của chính mình"
+}
+```
+
+**Response Error (404 - RequestDetail not found):**
+```json
+{
+  "error": "RequestDetail not found",
+  "message": "Không tìm thấy chi tiết đơn hàng"
+}
+```
+
+**Response Error (404 - Request not found):**
+```json
+{
+  "error": "Request not found", 
+  "message": "Không tìm thấy đơn hàng chứa chi tiết này"
+}
+```
+
+**Lưu ý:**
+- Customer chỉ có thể đánh giá các requestDetail thuộc về đơn hàng của chính mình
+- RequestDetail phải có trạng thái "completed" (đã hoàn thành) mới có thể đánh giá
+- Có thể cập nhật từng thành phần của comment riêng biệt (chỉ gửi review, chỉ gửi loseThings, hoặc kết hợp)
+- API sử dụng phương pháp cập nhật từng trường để không ghi đè dữ liệu hiện có
+- Thông tin đánh giá sẽ được lưu vào trường `comment` trong requestDetail
+- Hệ thống sẽ kiểm tra quyền sở hữu thông qua số điện thoại trong JWT token
+
+**Ví dụ request body khác:**
+
+Chỉ cập nhật nhận xét văn bản:
+```json
+{
+  "detailId": "requestDetail_id_here",
+  "comment": {
+    "review": "Công việc hoàn thành tốt"
+  }
+}
+```
+
+Chỉ cập nhật thông tin mất/hỏng đồ:
+```json
+{
+  "detailId": "requestDetail_id_here", 
+  "comment": {
+    "loseThings": true,
+    "breakThings": false
+  }
+}
+```
+
 ## 3. Service APIs (Quản lý dịch vụ)
 
 ### 3.1 Lấy danh sách dịch vụ

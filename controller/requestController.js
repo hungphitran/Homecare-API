@@ -82,9 +82,9 @@ async function calculateTotalCost (serviceTitle, startTime, endTime,workDate) {
 
     const basicCost = parseFloat(servicePrice);
     const HSDV = parseFloat(serviceFactor);
-    const HSovertime = parseFloat(coefficient_other.coefficientList[0].value);
-    const HScuoituan = parseFloat(coefficient_other.coefficientList[1].value);
-    const HSle = parseFloat(coefficient_other.coefficientList[2]?.value || 1);
+    const HSovertime = parseFloat(coefficient_other.coefficientList[0].value);// hệ số làm ngoài giờ
+    const HScuoituan = parseFloat(coefficient_other.coefficientList[1].value);// hệ số cuối tuần
+    const HSle = parseFloat(coefficient_other.coefficientList[2]?.value || 1);// hệ số lễ (nếu có, mặc định 1 nếu không có
     const { isHoliday } = require('../utils/holidays');
 
     // Tất cả thời gian được xử lý theo UTC để đảm bảo tính nhất quán
@@ -935,6 +935,7 @@ const requestController ={
             res.status(200).json(cost);
             
         } catch (error) {
+            console.error("Error in calculateCost:", error);
             res.status(500).json({
                 error: "Internal server error",
                 message: "Không thể tính toán chi phí"
