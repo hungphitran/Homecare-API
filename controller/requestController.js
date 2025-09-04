@@ -598,7 +598,6 @@ const requestController ={
 
     },
     assign: async (req,res,next)=>{
-        console.log("Assigning helper to requestDetail", req.body);
         let detailId = req.body.detailId; // Change to receive requestDetail ID
         let helperId = req.user.id || req.user.phone; // Get helper ID from JWT token
         
@@ -608,7 +607,7 @@ const requestController ={
                 return res.status(500).send("Cannot find requestDetail");
             }
 
-            if (schedule.status !== "pending") {
+            if (schedule.status != "pending") {
                 return res.status(500).send("RequestDetail is not available for assignment");
             }
 
@@ -652,7 +651,7 @@ const requestController ={
                 if (!request) {
                     
                     //update status of helper is working
-                    let helper = await Helper.findOne({_id:detail.helper_id})
+                    let helper = await Helper.findOne({_id:schedule.helper_id})
                     if(helper){
                         helper.status = "working"
                         await helper.save()
@@ -704,6 +703,7 @@ const requestController ={
                 });
             }
         } catch (err) {
+            console.error("Error in assign:", err);
             return res.status(500).json({ error: 'Internal server error' });
         }
     },
