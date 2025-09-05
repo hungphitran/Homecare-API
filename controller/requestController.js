@@ -806,10 +806,11 @@ const requestController ={
                     });
                 }
                 
+                // Update detail status
                 detail.status ="inProgress";
-                await detail.save();
                 
                 // Update parent request status to inProgress if it was pending
+                const prev = request.status;
                 if(request.status === "pending"){
                     // Validate request status transition
                     if (!isValidStatusTransition(request.status, "inProgress", "request")) {
@@ -818,17 +819,22 @@ const requestController ={
                             message: `Invalid request status transition from ${request.status} to inProgress`
                         });
                     }
-                    
-                    const prev = request.status;
                     request.status = "inProgress";
+                }
+                
+                // Save all changes together
+                await detail.save();
+                if (prev !== request.status) {
                     await request.save();
-                    try {
-                        if (prev !== request.status) {
-                            await notifyOrderStatusChange(request, request.status);
-                        }
-                    } catch (e) {
-                        console.warn('Notify (startWork) failed:', e?.message || e);
+                }
+                
+                // Send notification
+                try {
+                    if (prev !== request.status) {
+                        await notifyOrderStatusChange(request, request.status);
                     }
+                } catch (e) {
+                    console.warn('Notify (startWork) failed:', e?.message || e);
                 }
                 return res.status(200).json({
                     success: true,
@@ -882,35 +888,47 @@ const requestController ={
                     });
                 }
                 
+                // Update detail status
                 detail.status ="completed";
-                await detail.save();
 
-                // Update parent request status to waitPayment if all details are completed
+                // Check if all details are completed for parent request status update
                 const details = await RequestDetail.find({ _id: { $in: request.scheduleIds } }).select('status');
                 const allCompleted = details.every(d => [ 'completed','cancelled'].includes(d.status));
                 const prev = request.status;
+                
+                // Update parent request status to waitPayment if all details are completed
                 if (allCompleted && request.status != 'waitPayment') {
                     // Validate request status transition
                     if (!isValidStatusTransition(request.status, "waitPayment", "request")) {
                         console.warn(`Invalid request status transition from ${request.status} to waitPayment`);
                     } else {
                         request.status = 'waitPayment';
-                        await request.save();
-                        try {
-                            if (prev != request.status) {
-                                await notifyOrderStatusChange(request, request.status);
-                            }
-                        } catch (e) {
-                            console.warn('Notify (finishRequest) failed:', e?.message || e);
-                        }
                     }
                 }
-                //update status of helper is online
-                let helper = await Helper.findOne({_id:detail.helper_id})
+                
+                // Get helper to update status
+                let helper = await Helper.findOne({_id:detail.helper_id});
                 if(helper){
-                    helper.status = "online"
+                    helper.status = "online";
+                }
+                
+                // Save all changes together
+                await detail.save();
+                if (prev !== request.status) {
+                    await request.save();
+                }
+                if(helper){
                     await helper.save()
-                    .catch(err=>console.warn("Cannot update helper status to online:", err))
+                    .catch(err=>console.warn("Cannot update helper status to online:", err));
+                }
+                
+                // Send notification
+                try {
+                    if (prev != request.status) {
+                        await notifyOrderStatusChange(request, request.status);
+                    }
+                } catch (e) {
+                    console.warn('Notify (finishRequest) failed:', e?.message || e);
                 }
                 return res.status(200).json({
                     success: true,
