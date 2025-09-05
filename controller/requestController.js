@@ -12,6 +12,54 @@ const moment = require('moment');
 const timeUtils = require('../utils/timeUtils');
 const { notifyOrderStatusChange } = require('../utils/notifications');
 
+/**
+ * STATUS FLOW IMPLEMENTATION - Updated according to STATUS_FLOW.md
+ * 
+ * Request Status Flow: pending → inProgress → waitPayment → completed
+ * RequestDetail Status Flow: pending → assigned → inProgress → completed
+ * 
+ * Key Changes Made:
+ * 1. Added status transition validation
+ * 2. Improved error handling and responses
+ * 3. Added alias methods (processing, finish) for API consistency
+ * 4. Added helper availability checking in assign
+ * 5. Added getStatusFlow endpoint for documentation
+ * 6. Ensured proper notification sending on status changes
+ */
+
+
+/**
+ * Helper function to validate status transitions according to STATUS_FLOW.md
+ * @param {string} currentStatus - Current status
+ * @param {string} newStatus - Desired new status
+ * @param {string} type - 'request' or 'requestDetail'
+ * @returns {boolean} - Whether the transition is valid
+ */
+function isValidStatusTransition(currentStatus, newStatus, type = 'requestDetail') {
+    const validTransitions = {
+        requestDetail: {
+            'pending': ['assigned', 'cancelled'],
+            'assigned': ['inProgress', 'cancelled'],
+            'inProgress': ['completed', 'cancelled'],
+            'completed': [], // Final state
+            'cancelled': [] // Final state
+        },
+        request: {
+            'pending': ['inProgress', 'cancelled'],
+            'inProgress': ['waitPayment', 'cancelled'],
+            'waitPayment': ['completed', 'cancelled'],
+            'completed': [], // Final state
+            'cancelled': [] // Final state
+        }
+    };
+    
+    const transitions = validTransitions[type];
+    if (!transitions || !transitions[currentStatus]) {
+        return false;
+    }
+    
+    return transitions[currentStatus].includes(newStatus);
+}
 
 /**
  * Helper function to convert UTC time to Vietnam time (+7) for response
@@ -341,6 +389,7 @@ const requestController ={
         const mainEndTimeObj = timeUtils.timeToDate(standardizedEndTime, firstWorkingDate, true);
         
         let newOrder = new Request({
+            requestType: req.body.requestType,
             customerInfo: req.body.customerInfo,
             service: req.body.service,
             startTime: mainStartTimeObj,
@@ -353,7 +402,7 @@ const requestController ={
         });
         
         await newOrder.save();
-        res.status(201).json({
+        res.status(200).json({
             success: true,
             message: "Order created successfully",
             order: newOrder,
@@ -362,21 +411,10 @@ const requestController ={
                 workingDates: finalWorkingDates.length,
                 schedules: scheduleIds.length
             },
-            note: "Helper will be assigned later through assign endpoint"
+            note: "Người giúp việc sẽ được gán sau khi đơn hàng được tạo",
         });
         } catch (error) {
-            console.error("Error in create request:", error);
-            
-            // Provide more specific error messages
-            let errorMessage = "Internal server error";
-            if (error.name === 'ValidationError') {
-                errorMessage = "Validation error: " + Object.values(error.errors).map(e => e.message).join(', ');
-            } else if (error.name === 'CastError') {
-                errorMessage = "Invalid data format";
-            } else if (error.code === 11000) {
-                errorMessage = "Duplicate entry found";
-            }
-            
+            console.error("Error in create request:", error);            
             res.status(500).json({
                 success: false,
                 message: errorMessage,
@@ -413,18 +451,15 @@ const requestController ={
                     const filteredSchedules = allSchedules.filter(schedule => {
                         // Chỉ hiển thị RequestDetail chưa được gán helper (status = pending, helper_id = null) 
                         // và thời gian bắt đầu cách hiện tại <= 2h (tính theo UTC)
-                        if (schedule.status === 'pending' && schedule.helper_id=="notAvailable" && schedule.startTime ) {
+                        if (schedule.status == 'pending' && schedule.helper_id=="notAvailable" ) {
                             // Tính chênh lệch thời gian bằng milliseconds, sau đó chuyển sang phút
                             const timeDiffMinutes = (schedule.startTime.getTime() - currentTime.getTime()) / (1000 * 60);
-                            
                             // Chỉ hiển thị nếu thời gian bắt đầu cách hiện tại tối đa 120 phút (2 giờ)
                             // và là trong tương lai (>= 0)
                             return timeDiffMinutes >= 0 && timeDiffMinutes <= 120;
                         }
-                        
                         return false;
                     });
-                    
                     // Convert UTC times to Vietnam time for response
                     const requestWithVietnamTime = {
                         ...request.toObject(),
@@ -447,9 +482,6 @@ const requestController ={
             const validRequests = requestsWithSchedules.filter(request => 
                 request.schedules && request.schedules.length > 0
             )
-            
-
-            
             res.status(200).json(validRequests);
         } catch (err) {
             console.error("Error fetching all requests:", err);
@@ -576,8 +608,24 @@ const requestController ={
 
         // Ensure all details are cancellable (pending or assigned status allowed)
         const detailDocs = await RequestDetail.find({ _id: { $in: request.scheduleIds } });
-        if (!detailDocs.every(d => ["pending", "assigned"].includes(d.status))) {
-            return res.status(400).json("cannot cancel this request");
+        const nonCancellableDetails = detailDocs.filter(d => 
+            !isValidStatusTransition(d.status, "cancelled", "requestDetail")
+        );
+        
+        if (nonCancellableDetails.length > 0) {
+            const invalidStatuses = nonCancellableDetails.map(d => d.status).join(', ');
+            return res.status(400).json({
+                success: false,
+                message: `Cannot cancel request. Some details have invalid status for cancellation: ${invalidStatuses}`
+            });
+        }
+        
+        // Validate request status transition
+        if (!isValidStatusTransition(request.status, "cancelled", "request")) {
+            return res.status(400).json({
+                success: false,
+                message: `Cannot cancel request. Invalid status transition from ${request.status} to cancelled`
+            });
         }
         // Cancel all
         for (const d of detailDocs) {
@@ -594,7 +642,14 @@ const requestController ={
         } catch (e) {
             console.warn('Notify (cancelled) failed:', e?.message || e);
         }
-        return res.status(200).json("success")
+        return res.status(200).json({
+            success: true,
+            message: "Request cancelled successfully",
+            request: {
+                id: request._id,
+                status: request.status
+            }
+        });
 
     },
     assign: async (req,res,next)=>{
@@ -608,7 +663,34 @@ const requestController ={
             }
 
             if (schedule.status != "pending") {
-                return res.status(500).send("RequestDetail is not available for assignment");
+                return res.status(400).json({
+                    success: false,
+                    message: "RequestDetail is not available for assignment. Current status: " + schedule.status
+                });
+            }
+            
+            // Validate status transition
+            if (!isValidStatusTransition(schedule.status, "assigned", "requestDetail")) {
+                return res.status(400).json({
+                    success: false,
+                    message: `Invalid status transition from ${schedule.status} to assigned`
+                });
+            }
+
+            // Check if helper exists and is available
+            let helper = await Helper.findOne({_id: helperId});
+            if (!helper) {
+                return res.status(404).json({
+                    success: false,
+                    message: "Helper not found"
+                });
+            }
+            
+            if (helper.status !== "online") {
+                return res.status(400).json({
+                    success: false,
+                    message: `Helper is not available. Current status: ${helper.status}`
+                });
             }
 
             // Check if the work time is within 2 hours from now 
@@ -628,47 +710,34 @@ const requestController ={
             }
 
             // Update the schedule
+            console.log(`Assigning helper ${helperId} to requestDetail ${schedule._id} ` +  typeof schedule._id);
             schedule.helper_id = helperId;
-            schedule.status = "assigned";
-            await schedule.save();
-            
+            schedule.status = "assigned";        
+            // Update helper status to working
+            helper.status = "working";            
             // Find parent request for notification
-            const request = await Request.findOne({ scheduleIds: { $in: [detailId] } });
+            console.log('Looking for request with scheduleId:', schedule._id);
+            const request = await Request.findOne({ scheduleIds: { $in: [schedule._id] } })
+            .populate("scheduleIds");
+            
+            console.log('Found request:', request ? request._id : 'null');
             
             if (!request) {
-                // Try alternative search methods
-                let requestWithObjectId = null;
-                try {
-                    // Let Mongoose handle ObjectId conversion
-                    requestWithObjectId = await Request.findOne({ scheduleIds: { $in: [detailId] } });
-                    if (requestWithObjectId) {
-                        request = requestWithObjectId;
-                    }
-                } catch (objIdError) {
-                    // ObjectId conversion failed, continue with error handling
-                }
-                
-                if (!request) {
-                    
-                    //update status of helper is working
-                    let helper = await Helper.findOne({_id:schedule.helper_id})
-                    if(helper){
-                        helper.status = "working"
-                        await helper.save()
-                        .catch(err=>console.warn("Cannot update helper status to working:", err))
-                    }
-
-                    return res.status(200).json({
-                        message: "Successfully assigned to requestDetail, but could not find parent request for notification",
-                        requestDetail: {
-                            _id: schedule._id,
-                            helper_id: schedule.helper_id,
-                            status: schedule.status
-                        },
-                        warning: "Notification not sent - parent request not found"
-                    });
-                }
+                return res.status(500).send("Cannot find parent request for this detail");
             }
+            
+            // Update request status to inProgress if it was pending
+            if (request.status === "pending") {
+                request.status = "inProgress";
+            }
+            
+            // Save all changes
+            await schedule.save()
+            .then(() => console.log("Schedule saved"))
+            await request.save()
+            .then(() => console.log("Request saved"))
+            await helper.save()
+            .then(() => console.log("Helper status updated to working"));
 
             try {
                 const notificationResult = await notifyOrderStatusChange(request, "assigned");
@@ -709,125 +778,212 @@ const requestController ={
     },
     
     startWork:  async (req,res,next)=>{
-        let detailId = req.body.detailId;
-        let detail = await RequestDetail.findOne({_id:detailId}) 
-        .then(data=>data)
-        .catch(err=>res.status(500).send(err))
-        
-        // lấy request  chứa detailId - Let Mongoose handle ObjectId conversion
-        let request = await Request.findOne({scheduleIds : detailId})
-        .populate("scheduleIds")
-        .then(data=>data)
-        .catch(err=>res.status(500).send(err))
-
-        if(!detail){
-            return res.status(500).send("can not find detail");        
-        }
-        // Updated to accept assigned status (after helper assignment) (update both requestDetail and parent Request)
-        if(detail.status==="assigned"){
-            detail.status ="inProgress";
-            await detail.save()
-            .catch(err => res.status(500).send(err));
-            // Update parent request status to inProgress if it was pending
-            if(request.status === "pending"){
-                const prev = request.status;
-                request.status = "inProgress";
-                await request.save();
-                try {
-                    if (prev !== request.status) {
-                        await notifyOrderStatusChange(request, request.status);
-                    }
-                } catch (e) {
-                    console.warn('Notify (startWork) failed:', e?.message || e);
-                }
+        try {
+            let detailId = req.body.detailId;
+            let detail = await RequestDetail.findOne({_id:detailId});
+            
+            if(!detail){
+                return res.status(500).send("can not find detail");        
             }
-            return res.status(200).send("success");
-        }
-        else{
-            res.status(500).send("can not change status of detail")
+            
+            // Find parent request for this detail
+            const request = await Request.findOne({ scheduleIds: { $in: [detail._id] } })
+            .populate("scheduleIds")
+            .then((data)=>data)
+            .catch((err)=> res.status(500).json(err));
+            
+            if (!request) {
+                return res.status(500).send("Cannot find parent request for this detail");
+            }
+
+            // Updated to accept assigned status (after helper assignment) (update both requestDetail and parent Request)
+            if(detail.status==="assigned"){
+                // Validate status transition
+                if (!isValidStatusTransition(detail.status, "inProgress", "requestDetail")) {
+                    return res.status(400).json({
+                        success: false,
+                        message: `Invalid status transition from ${detail.status} to inProgress`
+                    });
+                }
+                
+                detail.status ="inProgress";
+                await detail.save();
+                
+                // Update parent request status to inProgress if it was pending
+                if(request.status === "pending"){
+                    // Validate request status transition
+                    if (!isValidStatusTransition(request.status, "inProgress", "request")) {
+                        return res.status(400).json({
+                            success: false,
+                            message: `Invalid request status transition from ${request.status} to inProgress`
+                        });
+                    }
+                    
+                    const prev = request.status;
+                    request.status = "inProgress";
+                    await request.save();
+                    try {
+                        if (prev !== request.status) {
+                            await notifyOrderStatusChange(request, request.status);
+                        }
+                    } catch (e) {
+                        console.warn('Notify (startWork) failed:', e?.message || e);
+                    }
+                }
+                return res.status(200).json({
+                    success: true,
+                    message: "Work started successfully",
+                    requestDetail: {
+                        id: detail._id,
+                        status: detail.status
+                    },
+                    request: {
+                        id: request._id,
+                        status: request.status
+                    }
+                });
+            }
+            else{
+                res.status(400).json({
+                    success: false,
+                    message: `Cannot start work. RequestDetail status must be 'assigned', current status: ${detail.status}`
+                });
+            }
+        } catch (err) {
+            console.error("Error in startWork:", err);
+            return res.status(500).json({ error: 'Internal server error' });
         }
     },
     finishRequest: async (req,res,next)=>{
-        let detailId = req.body.detailId;
-        let detail = await RequestDetail.findOne({_id:detailId}) 
-        .then(data=>data)
-        .catch(err=>res.status(500).send(err))
+        try {
+            let detailId = req.body.detailId;
+            let detail = await RequestDetail.findOne({_id:detailId});
 
-        let request  = await Request.findOne({scheduleIds : detailId})
-        .populate("scheduleIds")
-        .then(data=>data)
-        .catch(err=>res.status(500).send(err))
-
-        
-        //update status of helper is online
-        let helper = await Helper.findOne({_id:detail.helper_id})
-        if(helper){
-            helper.status = "online"
-            await helper.save()
-            .catch(err=>console.warn("Cannot update helper status to working:", err))
-        }
-
-        if(!detail){
-            return res.status(500).send("can not find detail");        
-        }
-        if(detail.status==="inProgress"){
-            detail.status ="waitPayment";
-            await detail.save().catch(err => res.status(500).send(err));
-
-            // Update parent request status to waitPayment if all details are in waitPayment or completed
-            const details = await RequestDetail.find({ _id: { $in: request.scheduleIds } }).select('status');
-            const allWaitPaymentOrCompleted = details.every(d => ['waitPayment', 'completed','cancelled'].includes(d.status));
-            const prev = request.status;
-            if (allWaitPaymentOrCompleted && request.status !== 'waitPayment') {
-                request.status = 'waitPayment';
-                await request.save();
-                try {
-                    if (prev !== request.status) {
-                        await notifyOrderStatusChange(request, request.status);
-                    }
-                } catch (e) {
-                    console.warn('Notify (finishRequest) failed:', e?.message || e);
-                }
+            if(!detail){
+                return res.status(500).send("can not find detail");        
             }
 
-            return res.status(200).send("success");
-        }
-        else{
-            res.status(500).send("can not change status of detail") 
+            // Find parent request for this detail
+            const request = await Request.findOne({ scheduleIds: { $in: [detail._id] } })
+            .populate("scheduleIds")
+            .then((data)=>data)
+                    
+            if (!request) {
+                // Debug: Check if this scheduleId exists in any request
+                return res.status(500).send("Cannot find parent request for this detail");
+            }
+
+            if(detail.status==="inProgress"){
+                // Validate status transition
+                if (!isValidStatusTransition(detail.status, "completed", "requestDetail")) {
+                    return res.status(400).json({
+                        success: false,
+                        message: `Invalid status transition from ${detail.status} to completed`
+                    });
+                }
+                
+                detail.status ="completed";
+                await detail.save();
+
+                // Update parent request status to waitPayment if all details are completed
+                const details = await RequestDetail.find({ _id: { $in: request.scheduleIds } }).select('status');
+                const allCompleted = details.every(d => [ 'completed','cancelled'].includes(d.status));
+                const prev = request.status;
+                if (allCompleted && request.status != 'waitPayment') {
+                    // Validate request status transition
+                    if (!isValidStatusTransition(request.status, "waitPayment", "request")) {
+                        console.warn(`Invalid request status transition from ${request.status} to waitPayment`);
+                    } else {
+                        request.status = 'waitPayment';
+                        await request.save();
+                        try {
+                            if (prev != request.status) {
+                                await notifyOrderStatusChange(request, request.status);
+                            }
+                        } catch (e) {
+                            console.warn('Notify (finishRequest) failed:', e?.message || e);
+                        }
+                    }
+                }
+                //update status of helper is online
+                let helper = await Helper.findOne({_id:detail.helper_id})
+                if(helper){
+                    helper.status = "online"
+                    await helper.save()
+                    .catch(err=>console.warn("Cannot update helper status to online:", err))
+                }
+                return res.status(200).json({
+                    success: true,
+                    message: "RequestDetail completed successfully",
+                    requestDetail: {
+                        id: detail._id,
+                        status: detail.status
+                    },
+                    request: {
+                        id: request._id,
+                        status: request.status,
+                        allDetailsCompleted: allCompleted
+                    }
+                });
+            }
+            else{
+                res.status(400).json({
+                    success: false,
+                    message: `Cannot finish request. RequestDetail status must be 'inProgress', current status: ${detail.status}`
+                });
+            }
+        } catch (err) {
+            console.error("Error in finishRequest:", err);
+            return res.status(500).json({ error: 'Internal server error' });
         }
     },
     finishPayment: async (req,res,next)=>{
         try {
-            let detailId = req.body.detailId;
-            let detail = await RequestDetail.findOne({ _id: detailId }).then(data => data)
-            let request = await Request.findOne({ scheduleIds: { $in: [detailId] } }).populate("scheduleIds")
-            .then(data=>data)
-            .catch(err=>res.status(500).send(err))
-            if (!detail) {
-                return res.status(500).send("Cannot find detail");
+            let id = req.body.id;
+            let order = await Request.findOne({ _id: id })
+            .then(data => data)
+            if (!order) {
+                return res.status(500).send("Không tìm thấy đơn hàng");
             }
-            else if(detail.status == "waitPayment") {
-                detail.status = "completed";
-                await detail.save();
-                // Check if all details completed
-                const details = await RequestDetail.find({ _id: { $in: request.scheduleIds } }).select('status');
-                const allCompleted = details.every(d => d.status === 'completed');
-                const prev = request.status;
-                // Skip confirm status - go directly to completed when all details are done
-                request.status = allCompleted ? 'completed' : 'pending';
-                await request.save();
-                try {
-                    if (prev !== request.status) {
-                        await notifyOrderStatusChange(request, request.status);
-                    }
-                } catch (e) {
-                    console.warn('Notify (finishPayment) failed:', e?.message || e);
+            if (order.status !== "waitPayment") {
+                return res.status(400).json({
+                    success: false,
+                    message: `Order is not in waitPayment status. Current status: ${order.status}`
+                });
+            }
+            
+            // Validate status transition
+            if (!isValidStatusTransition(order.status, "completed", "request")) {
+                return res.status(400).json({
+                    success: false,
+                    message: `Invalid status transition from ${order.status} to completed`
+                });
+            }
+
+            const prev = order.status;
+            order.status = "completed";
+            await order.save();
+            
+            // Send notification for status change
+            try {
+                if (prev !== order.status) {
+                    await notifyOrderStatusChange(order, order.status);
                 }
-                return res.status(200).send("Success");
+            } catch (e) {
+                console.warn('Notify (finishPayment) failed:', e?.message || e);
             }
-            return res.status(500).send("Cannot change status of detail");
+            
+            res.status(200).json({
+                success: true,
+                message: "Payment confirmed and order completed successfully",
+                order: {
+                    id: order._id,
+                    status: order.status
+                }
+            });
 
         } catch (err) {
+            console.error("Error in finishPayment:", err);
             return res.status(500).json({ error: 'Internal server error' });
         }
     },
@@ -836,7 +992,7 @@ const requestController ={
             let id = req.body.id;
             let order = await Request.findOne({ _id: id }).then(data => data)
             if (!order) {
-                return res.status(500).send("Cannot find order");
+                return res.status(500).send("order not found");
             }
             for(let scheduleId of order.scheduleIds){
                 let schedule = await RequestDetail.findOne({_id:scheduleId})
@@ -848,6 +1004,7 @@ const requestController ={
             res.status(200).send("Success")
 
         } catch (err) {
+            console.error("Error in rejectHelper:", err);
             return res.status(500).json({ error: 'Internal server error' });
         }
     },
@@ -873,7 +1030,7 @@ const requestController ={
                 
                 if (!service) {
                     return res.status(404).json({
-                        error: "Service not found",
+                        error: "service not found",
                         message: `Service with ID/title "${serviceId}" not found`
                     });
                 }

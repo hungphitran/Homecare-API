@@ -6,7 +6,7 @@ const { authenticateToken, requireHelper, requireCustomer } = require('../middle
 router.post('/review', authenticateToken, requireCustomer, requestDetailController.postReview)
 
 // Helper can get their own request details
-router.get('/helper/:id', authenticateToken, requireHelper, requestDetailController.getByHelperId);
+// router.get('/helper/:id', authenticateToken, requireHelper, requestDetailController.getByHelperId);
 
 // Get request details by IDs (accessible to authenticated users)
 router.get('/', authenticateToken, requestDetailController.getByIds);
