@@ -12,20 +12,6 @@ const moment = require('moment');
 const timeUtils = require('../utils/timeUtils');
 const { notifyOrderStatusChange } = require('../utils/notifications');
 
-/**
- * STATUS FLOW IMPLEMENTATION - Updated according to STATUS_FLOW.md
- * 
- * Request Status Flow: pending → inProgress → waitPayment → completed
- * RequestDetail Status Flow: pending → assigned → inProgress → completed
- * 
- * Key Changes Made:
- * 1. Added status transition validation
- * 2. Improved error handling and responses
- * 3. Added alias methods (processing, finish) for API consistency
- * 4. Added helper availability checking in assign
- * 5. Added getStatusFlow endpoint for documentation
- * 6. Ensured proper notification sending on status changes
- */
 
 
 /**
@@ -39,15 +25,15 @@ function isValidStatusTransition(currentStatus, newStatus, type = 'requestDetail
     const validTransitions = {
         requestDetail: {
             'pending': ['assigned', 'cancelled'],
-            'assigned': ['inProgress', 'cancelled'],
-            'inProgress': ['completed', 'cancelled'],
+            'assigned': ['inProgress'],
+            'inProgress': ['completed'],
             'completed': [], // Final state
             'cancelled': [] // Final state
         },
         request: {
             'pending': ['inProgress', 'cancelled'],
-            'inProgress': ['waitPayment', 'cancelled'],
-            'waitPayment': ['completed', 'cancelled'],
+            'inProgress': ['waitPayment'],
+            'waitPayment': ['completed'],
             'completed': [], // Final state
             'cancelled': [] // Final state
         }
