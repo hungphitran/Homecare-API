@@ -83,7 +83,7 @@ const requestDetailController ={
             }
 
             // check if already reviewed
-            if (requestDetail.comment && (requestDetail.comment.review != "" || requestDetail.comment.loseThings !== undefined || requestDetail.comment.breakThings !== undefined)) {
+            if ((requestDetail.comment.review != "")) {
                 return res.status(400).json({
                     error: 'Already reviewed',
                     message: 'Đơn hàng này đã được đánh giá'
