@@ -10,7 +10,7 @@ const Helper = require('../model/helper.model')
 const dayjs = require('dayjs');
 const moment = require('moment');
 const timeUtils = require('../utils/timeUtils');
-const { notifyOrderStatusChange } = require('../utils/notifications');
+const { notifyOrderStatusChange, notifyDetailStatusChange, notifyPaymentRequest } = require('../utils/notifications');
 
 const holidayUtils = require('../utils/holidays');
 const CostFactorType = require('../model/costFactorType.model');
@@ -638,6 +638,13 @@ const requestController ={
         for (const d of detailDocs) {
             d.status = 'cancelled';
             await d.save();
+            
+            // Send detail notification for each cancelled detail
+            try {
+                await notifyDetailStatusChange(request, d, "cancelled");
+            } catch (e) {
+                console.warn(`Notify detail cancellation failed for detail ${d._id}:`, e?.message || e);
+            }
         }
         const prevCancel = request.status;
         request.status="cancelled"
@@ -747,6 +754,9 @@ const requestController ={
             .then(() => console.log("Helper status updated to working"));
 
             try {
+                // Send detail notification when helper is assigned
+                await notifyDetailStatusChange(request, schedule, "assigned");
+                
                 const notificationResult = await notifyOrderStatusChange(request, "assigned");
                 
                 return res.status(200).json({
@@ -837,6 +847,10 @@ const requestController ={
                 
                 // Send notification
                 try {
+                    // Always send detail notification when status changes
+                    await notifyDetailStatusChange(request, detail, "inProgress");
+                    
+                    // Send request notification only if request status changed
                     if (prev !== request.status) {
                         await notifyOrderStatusChange(request, request.status);
                     }
@@ -931,8 +945,12 @@ const requestController ={
                 
                 // Send notification
                 try {
-                    if (prev != request.status) {
-                        await notifyOrderStatusChange(request, request.status);
+                    // Always send detail notification when status changes
+                    await notifyDetailStatusChange(request, detail, "completed");
+                    
+                    // If all details are completed, send payment request notification
+                    if (allCompleted && prev != request.status) {
+                        await notifyPaymentRequest(request);
                     }
                 } catch (e) {
                     console.warn('Notify (finishRequest) failed:', e?.message || e);

@@ -316,8 +316,188 @@ async function notifyOrderStatusChange(order, newStatus, extraData = {}) {
   }
 }
 
+async function notifyDetailStatusChange(request, detail, newStatus, extraData = {}) {
+  const startTime = new Date();
+  console.log(`[NOTIFICATION] ========== START DETAIL NOTIFICATION PROCESS ==========`);
+  console.log(`[NOTIFICATION] Timestamp: ${startTime.toISOString()}`);
+  
+  if (!request || !request.customerInfo || !request.customerInfo.phone) {
+    console.error('[NOTIFICATION] ❌ VALIDATION FAILED: Missing customer phone in request:', request?._id);
+    return { 
+      success: false, 
+      message: 'Missing customer phone',
+      requestId: request?._id || 'unknown',
+      phone: 'not provided'
+    };
+  }
+  
+  if (!detail) {
+    console.error('[NOTIFICATION] ❌ VALIDATION FAILED: Missing detail information');
+    return { 
+      success: false, 
+      message: 'Missing detail information',
+      requestId: request?._id || 'unknown',
+      phone: request.customerInfo.phone
+    };
+  }
+  
+  const vnStatus = statusLabel(newStatus);
+  const title = 'Cập nhật chi tiết công việc';
+  
+  // Format working date for display
+  const workingDate = detail.workingDate ? new Date(detail.workingDate).toLocaleDateString('vi-VN') : 'N/A';
+  const startTime_str = detail.startTime ? new Date(detail.startTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : 'N/A';
+  const endTime_str = detail.endTime ? new Date(detail.endTime).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : 'N/A';
+  
+  const body = `Công việc ngày ${workingDate} (${startTime_str}-${endTime_str}) đã chuyển sang: ${vnStatus}`;
+  
+  const data = {
+    requestId: String(request._id),
+    detailId: String(detail._id),
+    status: String(newStatus),
+    workingDate: workingDate,
+    startTime: startTime_str,
+    endTime: endTime_str,
+    screen: 'RequestDetail',
+    ...extraData,
+  };
+  
+  console.log(`[NOTIFICATION] 📋 DETAIL NOTIFICATION DETAILS:`);
+  console.log(`- Request ID: ${request._id}`);
+  console.log(`- Detail ID: ${detail._id}`);
+  console.log(`- Customer Phone: ${request.customerInfo.phone}`);
+  console.log(`- Working Date: ${workingDate}`);
+  console.log(`- Time: ${startTime_str}-${endTime_str}`);
+  console.log(`- Status: ${newStatus} → ${vnStatus}`);
+  console.log(`- Title: ${title}`);
+  console.log(`- Body: ${body}`);
+  console.log(`- Data payload:`, JSON.stringify(data, null, 2));
+  
+  try {
+    console.log(`[NOTIFICATION] 🚀 Calling sendToCustomerPhone...`);
+    const result = await sendToCustomerPhone(request.customerInfo.phone, title, body, data);
+    
+    const endTime = new Date();
+    const duration = endTime.getTime() - startTime.getTime();
+    
+    // Enhanced result logging
+    if (result.success) {
+      console.log(`[NOTIFICATION] ✅ SUCCESS - Detail notification sent successfully!`);
+      console.log(`[NOTIFICATION] 📊 RESULT SUMMARY:`);
+      console.log(`- Phone: ${request.customerInfo.phone}`);
+      console.log(`- Detail ID: ${detail._id}`);
+      console.log(`- Tokens found: ${result.tokens || 0}`);
+      console.log(`- Messages sent: ${result.sent || 0}`);
+      console.log(`- Messages failed: ${result.failed || 0}`);
+      console.log(`- Duration: ${duration}ms`);
+    } else {
+      console.error(`[NOTIFICATION] ❌ FAILED - Detail notification could not be sent`);
+      console.error(`[NOTIFICATION] 📊 ERROR SUMMARY:`);
+      console.error(`- Phone: ${request.customerInfo.phone}`);
+      console.error(`- Detail ID: ${detail._id}`);
+      console.error(`- Error Message: ${result.message}`);
+      console.error(`- Duration: ${duration}ms`);
+    }
+    
+    console.log(`[NOTIFICATION] ========== END DETAIL NOTIFICATION PROCESS ==========\n`);
+    return result;
+    
+  } catch (error) {
+    const endTime = new Date();
+    const duration = endTime.getTime() - startTime.getTime();
+    
+    console.error(`[NOTIFICATION] 💥 EXCEPTION during detail notification sending:`);
+    console.error(`- Phone: ${request.customerInfo.phone}`);
+    console.error(`- Detail ID: ${detail._id}`);
+    console.error(`- Duration: ${duration}ms`);
+    console.error(`- Error:`, error);
+    console.error(`[NOTIFICATION] ========== END DETAIL NOTIFICATION PROCESS (WITH ERROR) ==========\n`);
+    
+    return {
+      success: false,
+      message: `Exception: ${error.message}`,
+      phone: request.customerInfo.phone,
+      requestId: request._id,
+      detailId: detail._id,
+      error: error
+    };
+  }
+}
+
+async function notifyPaymentRequest(request, extraData = {}) {
+  const startTime = new Date();
+  console.log(`[NOTIFICATION] ========== START PAYMENT NOTIFICATION PROCESS ==========`);
+  console.log(`[NOTIFICATION] Timestamp: ${startTime.toISOString()}`);
+  
+  if (!request || !request.customerInfo || !request.customerInfo.phone) {
+    console.error('[NOTIFICATION] ❌ VALIDATION FAILED: Missing customer phone in request:', request?._id);
+    return { 
+      success: false, 
+      message: 'Missing customer phone',
+      requestId: request?._id || 'unknown',
+      phone: 'not provided'
+    };
+  }
+  
+  const title = 'Yêu cầu thanh toán';
+  const body = `Tất cả công việc của đơn ${request._id} đã hoàn thành. Vui lòng thực hiện thanh toán.`;
+  
+  const data = {
+    requestId: String(request._id),
+    status: 'waitPayment',
+    screen: 'Payment',
+    ...extraData,
+  };
+  
+  console.log(`[NOTIFICATION] 📋 PAYMENT NOTIFICATION DETAILS:`);
+  console.log(`- Request ID: ${request._id}`);
+  console.log(`- Customer Phone: ${request.customerInfo.phone}`);
+  console.log(`- Title: ${title}`);
+  console.log(`- Body: ${body}`);
+  console.log(`- Data payload:`, JSON.stringify(data, null, 2));
+  
+  try {
+    console.log(`[NOTIFICATION] 🚀 Calling sendToCustomerPhone...`);
+    const result = await sendToCustomerPhone(request.customerInfo.phone, title, body, data);
+    
+    const endTime = new Date();
+    const duration = endTime.getTime() - startTime.getTime();
+    
+    if (result.success) {
+      console.log(`[NOTIFICATION] ✅ SUCCESS - Payment notification sent successfully!`);
+      console.log(`[NOTIFICATION] Duration: ${duration}ms`);
+    } else {
+      console.error(`[NOTIFICATION] ❌ FAILED - Payment notification could not be sent`);
+      console.error(`[NOTIFICATION] Error: ${result.message}, Duration: ${duration}ms`);
+    }
+    
+    console.log(`[NOTIFICATION] ========== END PAYMENT NOTIFICATION PROCESS ==========\n`);
+    return result;
+    
+  } catch (error) {
+    const endTime = new Date();
+    const duration = endTime.getTime() - startTime.getTime();
+    
+    console.error(`[NOTIFICATION] 💥 EXCEPTION during payment notification sending:`);
+    console.error(`- Phone: ${request.customerInfo.phone}`);
+    console.error(`- Duration: ${duration}ms`);
+    console.error(`- Error:`, error);
+    console.error(`[NOTIFICATION] ========== END PAYMENT NOTIFICATION PROCESS (WITH ERROR) ==========\n`);
+    
+    return {
+      success: false,
+      message: `Exception: ${error.message}`,
+      phone: request.customerInfo.phone,
+      requestId: request._id,
+      error: error
+    };
+  }
+}
+
 module.exports = {
   sendToCustomerPhone,
   notifyOrderStatusChange,
+  notifyDetailStatusChange,
+  notifyPaymentRequest,
   checkNotificationHealth,
 };
