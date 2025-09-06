@@ -6,14 +6,7 @@
   "scripts": {
     "start": "node index.js",
     "dev": "nodemon index.js",
-    "vercel-build": "echo 'Build completed'",
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "check-passwords": "node scripts/checkPasswordInfo.js",
-    "reset-passwords": "node scripts/resetPasswordsSafe.js",
-    "reset-passwords-force": "node scripts/resetPasswords.js",
-    "db:clear": "node scripts/clearAllData.js",
-    "db:seed": "node scripts/seedDatabase.js",
-    "db:reset": "node scripts/resetDatabase.js"
+    "vercel-build": "echo 'Build completed'"
   },
   "keywords": ["homecare", "api", "nodejs", "mongodb", "jwt", "vercel"],
   "author": "tran phi hung",
@@ -34,6 +27,18 @@
     "mongoose": "^8.5.4"
   },
   "devDependencies": {
-    "nodemon": "^3.1.4"
+    "nodemon": "^3.1.4",
+    "jest": "^29.7.0",
+    "supertest": "^6.3.3"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "collectCoverageFrom": [
+      "controller/**/*.js",
+      "!controller/index.js"
+    ],
+    "testMatch": [
+      "**/tests/**/*.test.js"
+    ]
   }
 }

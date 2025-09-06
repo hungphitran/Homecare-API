@@ -12,7 +12,8 @@ const moment = require('moment');
 const timeUtils = require('../utils/timeUtils');
 const { notifyOrderStatusChange } = require('../utils/notifications');
 
-
+const holidayUtils = require('../utils/holidays');
+const CostFactorType = require('../model/costFactorType.model');
 
 /**
  * Helper function to validate status transitions according to STATUS_FLOW.md
@@ -100,85 +101,104 @@ async function calculateTotalCost (serviceTitle, startTime, endTime,workDate) {
         return 0;
     }
 
-    const generalSetting = await GeneralSetting.findOne({}).select("officeStartTime officeEndTime");
-    let officeStartTime = generalSetting.officeStartTime;
-    let officeEndTime = generalSetting.officeEndTime;
-
-    const service = await Service.findOne({ title: serviceTitle }).select("coefficient_id basicPrice");
-    const servicePrice = service.basicPrice;
-    const serviceFactorData = await CostFactor.findOne(
-        { applyTo: "service" },
-        { coefficientList: { $elemMatch: { _id: service.coefficient_id } } }
-    );
-    const serviceFactor = serviceFactorData?.coefficientList[0]?.value || 1;
-
-    const coefficient_other = await CostFactor.findOne({ applyTo: "other" }).select("coefficientList");
-
-    const basicCost = parseFloat(servicePrice);
-    const HSDV = parseFloat(serviceFactor);
-    const HSovertime = parseFloat(coefficient_other.coefficientList[0].value);// hệ số làm ngoài giờ
-    const HScuoituan = parseFloat(coefficient_other.coefficientList[1].value);// hệ số cuối tuần
-    const HSle = parseFloat(coefficient_other.coefficientList[2]?.value || 1);// hệ số lễ (nếu có, mặc định 1 nếu không có
-    const { isHoliday } = require('../utils/holidays');
-
-    // Tất cả thời gian được xử lý theo UTC để đảm bảo tính nhất quán
-    // Tạo Date objects với UTC time để so sánh chính xác
-    const startUTC = moment.utc(`${workDate}T${startTime}:00`);
-    const endUTC = moment.utc(`${workDate}T${endTime}:00`);
-    
-    // Handle cross-midnight shifts
-    if (endUTC.isBefore(startUTC)) {
-        endUTC.add(1, 'day');
+    // Fetch service details
+    const service = await Service.findOne({ title: serviceTitle })
+    .select('basicPrice coefficient_id')
+    .then(s => s)
+    if (!service) {
+        throw new Error(`Service "${serviceTitle}" not found`);
     }
+    console.log(`Service found: basePrice=${service.basicPrice}, coefficient_id=${service.coefficient_id}`);
 
-    // Chuyển đổi giờ hành chính sang UTC để so sánh
-    const officeStartUTC = moment.utc(`${workDate}T${officeStartTime}:00`);
-    const officeEndUTC = moment.utc(`${workDate}T${officeEndTime}:00`);
+    const basicCost = service.basicPrice;
 
-    let totalCost = 0;
+    // calculate total hours
+    let [start_hour, start_minute] = startTime.split(':');
+    let [end_hour, end_minute] = endTime.split(':');
 
-    // Sử dụng UTC để tính toán ngày trong tuần (không chuyển đổi timezone)
-    const dayOfWeek = moment.utc(workDate).day();
-    const dailyHours = Math.abs(endUTC.diff(startUTC, "hour", true));
-    let T1 = 0; // Overtime hours
-    let T2 = 0; // Normal hours
+    let start = dayjs(`${workDate}T${start_hour.padStart(2, '0')}:${start_minute.padStart(2, '0')}:00.000Z`);
+    let end = dayjs(`${workDate}T${end_hour.padStart(2, '0')}:${end_minute.padStart(2, '0')}:00.000Z`);
 
-    // Calculate overtime before office hours (UTC)
-    if (startUTC.isBefore(officeStartUTC)) {
-        const otBeforeOffice = officeStartUTC.diff(startUTC, "hour", true);
-        T1 += otBeforeOffice;
+    const total_hours = end.diff(start, 'hour', true); // true for float result
+    if (total_hours <= 0) {
+        throw new Error("End time must be after start time");
     }
-
-    // Calculate overtime after office hours (UTC)
-    if (endUTC.isAfter(officeEndUTC)) {
-        const otAfterOffice = endUTC.diff(officeEndUTC, "hour", true);
-        T1 += otAfterOffice;
+    let totalHours = end.diff(start, 'hour', true); // true for float result
+    console.log(`Total hours: ${totalHours}`);
+    //calculate overtime hours
+    let overtimeHours = 0;
+    const settings = await GeneralSetting.findOne().select('officeStartTime officeEndTime');
+    if (!settings) {
+        throw new Error("General settings not found");
     }
+    const officeStart = dayjs(`${workDate}T${settings.officeStartTime}:00.000Z`);
+    const officeEnd = dayjs(`${workDate}T${settings.officeEndTime}:00.000Z`);
+    if (start.isBefore(officeStart)) {
+        if (end.isBefore(officeStart)) {
+            overtimeHours = totalHours;
+        } else {
+            overtimeHours += officeStart.diff(start, 'hour', true);
+            start = officeStart;
+        }
+    }
+    else if (start.isAfter(officeEnd)) {
+        overtimeHours = totalHours;
+    }
+    console.log(`Overtime hours after morning check: ${overtimeHours}`);
 
-    T2 = Math.max(0, dailyHours - T1);
 
+    // determine if workDate is weekend or holiday
+    const dayOfWeek = dayjs(workDate).day();
+    console.log(`Day of week: ${dayOfWeek} (0=Sunday, 6=Saturday)`);
     const isWeekend = (dayOfWeek === 0 || dayOfWeek === 6);
-    const holiday = isHoliday(workDate);
-    const applicableWeekendCoefficient = Math.max(isWeekend ? HScuoituan : 1, holiday ? HSle : 1);
+    const isHoliday = holidayUtils.isHoliday(workDate);
+    console.log(`isWeekend: ${isWeekend}, isHoliday: ${isHoliday}`);
+    
 
-    const overtimeCost = HSovertime * T1 * applicableWeekendCoefficient;
-    const normalCost = applicableWeekendCoefficient * T2;
-    totalCost = (basicCost * HSDV * (overtimeCost + normalCost));
+    //coefficient other
+    const time_coefficient = await CostFactorType.findOne({ applyTo: "other" })
+    .select('coefficientList')
+    if (!time_coefficient) {
+        throw new Error("Cost factor settings not found");
+    }
+    const weekend_coef = time_coefficient.coefficientList[1].value || 1; // weekend
+    const holiday_coef = time_coefficient.coefficientList[2].value || 1; // holiday
+    const overtime_coef = time_coefficient.coefficientList[0].value || 1; // overtime
+    const other_coef = isHoliday&&isWeekend ? Math.max(holiday_coef,weekend_coef) : (isHoliday ? holiday_coef : (isWeekend ? weekend_coef : 1));
 
+    const service_coef = await CostFactorType.findOne({ applyTo: "service" })
+    .select('coefficientList')
+    .then(data=>{
+        if (!data) {
+            throw new Error("Service cost factor settings not found");
+        }
+        const matchingCoefficient = data.coefficientList.find(
+            coef => coef._id.toString() === service.coefficient_id.toString()
+        );
+        if (matchingCoefficient) {
+            return parseFloat(matchingCoefficient.value);
+        } else {
+            console.warn(`Service coefficient not found for service: ${serviceTitle}`);
+            return 1; // default
+        }
+    })
+    .catch(err=>{
+        console.warn("Error fetching service coefficient:", err);
+        return 1; // default
+    });
+    let totalCost = basicCost * service_coef * other_coef *  (overtimeHours * overtime_coef   + (totalHours - overtimeHours));
+    
     return {
         // round to 2 decimal places
         totalCost: parseFloat(totalCost.toFixed(2)),
         servicePrice: basicCost,
-        HSDV: HSDV,
-        HSovertime: HSovertime,
-        HScuoituan: HScuoituan,
+        HSDV: service_coef,
+        HSovertime: overtime_coef,
+        HScuoituan: weekend_coef,
         isWeekend: isWeekend,
-        isHoliday: holiday,
-        totalOvertimeHours: T1,
-        totalNormalHours: T2,
-        applicableWeekendCoefficient: applicableWeekendCoefficient,
-        overtimeCost: overtimeCost,
-        normalCost: normalCost
+        isHoliday: isHoliday,
+        totalOvertimeHours: overtimeHours,
+        totalNormalHours: totalHours - overtimeHours,
     }
   };
 
