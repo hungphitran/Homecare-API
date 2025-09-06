@@ -105,6 +105,50 @@ const helperController={
             res.status(500).json({ error: err.message });
         }
     },
+    // change the working status of the helper
+    changeWorkingStatus: async (req,res,next)=>{
+        try {
+            if (!req.params.id) {
+                return res.status(400).json({
+                    error: 'Missing required parameter',
+                    message: 'id là bắt buộc'
+                });
+            }
+            if(req.user.role !== 'helper' || req.user.helper_id !== req.params.id) {
+                return res.status(403).json({
+                    error: 'Access denied',
+                    message: 'Bạn chỉ có thể thay đổi trạng thái làm việc của chính mình'
+                });
+            }
+
+            // Validate required fields
+            if (!req.body.workingStatus) {
+                return res.status(400).json({ 
+                    error: 'Missing required field',
+                    message: 'workingStatus là bắt buộc'
+                });
+            }
+            const validStatuses = ['online', 'offline'];
+            if (!validStatuses.includes(req.body.workingStatus)) {
+                return res.status(400).json({ 
+                    error: 'Invalid workingStatus value',
+                    message: `workingStatus phải là một trong các giá trị sau: ${validStatuses.join(', ')}`
+                });
+            }
+            
+            // Find and update the helper
+
+            const helper = await Helper.findById(req.params.id);
+            if (!helper) {
+                return res.status(404).json({ error: 'Helper not found' });
+            }
+            helper.workingStatus = req.body.workingStatus;
+            await helper.save();
+            res.status(200).json({ message: 'Working status updated successfully' });
+        } catch (err) {
+            res.status(500).json({ error: 'Internal server error' });
+        }   
+    },
 }
 
 module.exports=helperController;

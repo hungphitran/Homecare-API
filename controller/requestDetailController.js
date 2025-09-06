@@ -1,6 +1,7 @@
 const RequestDetail = require('../model/requestDetail.model')
 const Request = require('../model/request.model')
 const GeneralSetting = require('../model/generalSetting.model')
+const Helper = require('../model/helper.model')
 const moment = require("moment");
 const mongoose = require('mongoose')
 
@@ -81,10 +82,17 @@ const requestDetailController ={
                 });
             }
 
+            // check if already reviewed
+            if (requestDetail.comment && (requestDetail.comment.review != "" || requestDetail.comment.loseThings !== undefined || requestDetail.comment.breakThings !== undefined)) {
+                return res.status(400).json({
+                    error: 'Already reviewed',
+                    message: 'Đơn hàng này đã được đánh giá'
+                });
+            }
+
             // Find the Request that contains this RequestDetail
             // Convert to ObjectId for proper comparison since scheduleIds contains ObjectIds
             const requestDetailObjectId = new mongoose.Types.ObjectId(requestDetail._id);
-            console.log(requestDetailObjectId);
             const request = await Request.findOne({ 
                 scheduleIds: { $in: [requestDetailObjectId] }
             });
@@ -122,10 +130,21 @@ const requestDetailController ={
                 commentData['comment.breakThings'] = req.body.comment.breakThings;
             }
 
-            // Update the request detail with the complete comment
-            await RequestDetail.findByIdAndUpdate(req.body.detailId, {
-                $set: commentData
-            });
+            requestDetail.set(commentData);
+
+            let helperId = requestDetail.helper_id;
+            if (helperId) {
+                // Update helper's review statistics
+                const helper = await Helper.findById(helperId);
+                if (helper) {
+                    // Update average rating
+                    if(helper.averageRating ==0) helper.averageRating = req.body.rating;
+                    else helper.averageRating = (helper.averageRating + req.body.rating) / 2;
+                    await helper.save();
+                }
+            }
+
+            await requestDetail.save();
             
             res.status(200).json({ message: "Review updated successfully" });
         } catch (err) {

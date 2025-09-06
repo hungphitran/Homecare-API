@@ -35,11 +35,16 @@ const helperSchema = new mongoose.Schema({
     educationLevel: String,
     height: Number,
     weight: Number,
-    status: String, // offline, online, working
+    workingStatus: String, // offline, online, working
+    status: String, // active, inactive
     password: String,
     deleted: {
         type: Boolean,
         default: false
+    },
+    averageRating: {
+        type: Number,
+        default: 0
     },
     createdBy: {
         account_id: String,

@@ -24,7 +24,7 @@ const authenticateToken = (req, res, next) => {
             });
         }
         
-        req.user = user;
+        req.user = user;// { id, role, phone, helper_id (nếu là helper) }
         next();
     });
 };

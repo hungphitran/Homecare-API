@@ -199,6 +199,7 @@ async function calculateTotalCost (serviceTitle, startTime, endTime,workDate) {
         isHoliday: isHoliday,
         totalOvertimeHours: overtimeHours,
         totalNormalHours: totalHours - overtimeHours,
+        overtimeCost: parseFloat((basicCost * service_coef * other_coef * overtimeHours * overtime_coef).toFixed(2)),
     }
   };
 
@@ -692,10 +693,10 @@ const requestController ={
                 });
             }
             
-            if (helper.status !== "online") {
+            if (helper.workingStatus !== "online") {
                 return res.status(400).json({
                     success: false,
-                    message: `Helper is not available. Current status: ${helper.status}`
+                    message: `Helper is not available. Current status: ${helper.workingStatus}`
                 });
             }
 
@@ -720,7 +721,7 @@ const requestController ={
             schedule.helper_id = helperId;
             schedule.status = "assigned";        
             // Update helper status to working
-            helper.status = "working";            
+            helper.workingStatus = "working";            
             // Find parent request for notification
             console.log('Looking for request with scheduleId:', schedule._id);
             const request = await Request.findOne({ scheduleIds: { $in: [schedule._id] } })
@@ -915,7 +916,7 @@ const requestController ={
                 // Get helper to update status
                 let helper = await Helper.findOne({_id:detail.helper_id});
                 if(helper){
-                    helper.status = "online";
+                    helper.workingStatus = "online";
                 }
                 
                 // Save all changes together
