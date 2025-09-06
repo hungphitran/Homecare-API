@@ -108,13 +108,13 @@ const helperController={
     // change the working status of the helper
     changeWorkingStatus: async (req,res,next)=>{
         try {
-            if (!req.params.id) {
+            if (!req.user.id) {
                 return res.status(400).json({
                     error: 'Missing required parameter',
                     message: 'id là bắt buộc'
                 });
             }
-            if(req.user.role !== 'helper' || req.user.helper_id !== req.params.id) {
+            if(req.user.role !== 'helper') {
                 return res.status(403).json({
                     error: 'Access denied',
                     message: 'Bạn chỉ có thể thay đổi trạng thái làm việc của chính mình'
@@ -128,6 +128,8 @@ const helperController={
                     message: 'workingStatus là bắt buộc'
                 });
             }
+            
+
             const validStatuses = ['online', 'offline'];
             if (!validStatuses.includes(req.body.workingStatus)) {
                 return res.status(400).json({ 
@@ -138,9 +140,15 @@ const helperController={
             
             // Find and update the helper
 
-            const helper = await Helper.findById(req.params.id);
+            const helper = await Helper.findById({_id: req.user.id});
             if (!helper) {
                 return res.status(404).json({ error: 'Helper not found' });
+            }
+            if(helper.workingStatus === req.body.workingStatus) {
+                return res.status(400).json({ 
+                    error: 'No status change',
+                    message: 'Trạng thái làm việc không thay đổi'
+                });
             }
             helper.workingStatus = req.body.workingStatus;
             await helper.save();

@@ -3,7 +3,7 @@ const helperController = require('../controller/helperController')
 const { authenticateToken } = require('../middleware/auth');
 
 //change status of the helper
-router.patch('/status/:id',authenticateToken, helperController.changeWorkingStatus);
+router.patch('/status',authenticateToken, helperController.changeWorkingStatus);
 
 // Public - get helper details (for customers to see helper profiles)
 router.get('/:id', helperController.getOneById);
