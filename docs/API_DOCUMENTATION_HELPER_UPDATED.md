@@ -171,46 +171,40 @@
 
 ### 2.3 Nhận đơn hàng (Assign)
 - **Endpoint**: `POST /request/assign`
-- **Description**: Nhận (assign) một requestDetail cụ thể vào tài khoản helper hiện tại
+- **Description**: Nhận (assign) một request cụ thể vào tài khoản helper hiện tại
 - **Authentication**: Bắt buộc (helper only)
 
 **Request Body:**
 ```json
 {
-  "detailId": "requestDetail_id_here"
+  "requestId": "request_id_here"
 }
 ```
 
 **Validation Rules:**
-- `detailId`: Bắt buộc, ID của requestDetail cần nhận
-- RequestDetail phải có status = "pending" 
-- Helper_id phải là "notAvailable"
+- `requestId`: Bắt buộc, ID của request cần nhận
+- Request phải có status = "pending" 
 - Thời gian bắt đầu công việc phải trong khoảng từ hiện tại đến 2 giờ sau
 
 **Response Success (200):**
 ```json
 {
-  "message": "Successfully assigned to requestDetail",
-  "requestDetail": {
-    "_id": "requestDetail_id_here",
-    "helper_id": "helper_id_here",
+  "message": "Successfully assigned to request",
+  "request": {
+    "_id": "request_id_here",
     "status": "assigned"
-  },
-  "notification": {
-    "sent": true,
-    "message": "Notification sent successfully"
   }
 }
 ```
 
 **Response Errors:**
-- `400`: Work time is not within 2 hours window
-- `500`: RequestDetail is not available for assignment
-- `500`: Cannot find requestDetail
+- `400`: Invalid request data
+- `404`: Request not found
+- `500`: Internal server error
 
 **Lưu ý:**
-- API này chuyển trạng thái RequestDetail từ "pending" -> "assigned"
-- Helper_id sẽ được cập nhật từ "notAvailable" thành ID của helper đang đăng nhập
+- API này chuyển trạng thái Request từ "pending" -> "assigned"
+- Helper sẽ được gán vào tất cả requestDetail liên quan
 - Hệ thống sẽ gửi thông báo cho customer khi có helper nhận đơn
 
 ### 2.4 Bắt đầu làm việc  
@@ -221,13 +215,13 @@
 **Request Body:**
 ```json
 {
-  "detailId": "requestDetail_id_here"
+  "requestId": "request_id_here"
 }
 ```
 
 **Validation Rules:**
-- `detailId`: Bắt buộc, ID của requestDetail cần bắt đầu
-- RequestDetail phải có status = "assigned"
+- `requestId`: Bắt buộc, ID của request cần bắt đầu
+- Request phải có status = "assigned"
 
 **Response Success (200):**
 ```json
@@ -237,8 +231,7 @@
 ```
 
 **Lưu ý:**
-- Chuyển trạng thái RequestDetail từ "assigned" -> "inProgress"
-- Nếu Request cha đang có status = "pending", sẽ được chuyển thành "inProgress"
+- Chuyển trạng thái Request từ "assigned" -> "inProgress"
 - Hệ thống sẽ gửi thông báo cho customer khi helper bắt đầu làm việc
 
 ### 2.5 Hoàn thành công việc
@@ -248,6 +241,69 @@
 
 **Request Body:**
 ```json
+{
+  "requestId": "request_id_here"
+}
+```
+
+**Validation Rules:**
+- `requestId`: Bắt buộc, ID của request cần hoàn thành
+- Request phải có status = "inProgress"
+
+**Response Success (200):**
+```json
+{
+  "message": "Đã hoàn thành công việc, chờ thanh toán"
+}
+```
+
+### 2.6 Hoàn thành thanh toán
+- **Endpoint**: `POST /request/finishpayment`
+- **Description**: Đánh dấu hoàn thành thanh toán (chuyển trạng thái từ waitPayment -> completed)
+- **Authentication**: Bắt buộc (helper only)
+
+**Request Body:**
+```json
+{
+  "requestId": "request_id_here"
+}
+```
+
+**Validation Rules:**
+- `requestId`: Bắt buộc, ID của request cần hoàn thành thanh toán
+- Request phải có status = "waitPayment"
+
+**Response Success (200):**
+```json
+{
+  "message": "Đã hoàn thành thanh toán"
+}
+```
+
+## 3. Helper Management APIs
+
+### 3.1 Thay đổi trạng thái làm việc
+- **Endpoint**: `PATCH /helper/status`
+- **Description**: Thay đổi trạng thái làm việc của helper (online/offline/working)
+- **Authentication**: Bắt buộc (helper only)
+
+**Request Body:**
+```json
+{
+  "workingStatus": "online"
+}
+```
+
+**Validation Rules:**
+- `workingStatus`: Bắt buộc, giá trị hợp lệ: "online", "offline", "working"
+
+**Response Success (200):**
+```json
+{
+  "message": "Cập nhật trạng thái làm việc thành công",
+  "workingStatus": "online"
+}
+```
 {
   "detailId": "requestDetail_id_here",
   "comment": {

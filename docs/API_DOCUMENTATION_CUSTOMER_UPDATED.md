@@ -157,23 +157,25 @@
 - `serviceTitle` hoặc `serviceId`: Bắt buộc, tên hoặc ID dịch vụ
 - `startTime`: Bắt buộc, thời gian bắt đầu (HH:mm hoặc ISO format)
 - `endTime`: Bắt buộc, thời gian kết thúc (HH:mm hoặc ISO format) 
-- `workDate`: Bắt buộc, ngày làm việc (YYYY-MM-DD)
+- `workDate`: Bắt buộc, ngày làv việc (YYYY-MM-DD)
 
 **Response Success (200):**
 ```json
 {
-  "totalCost": 450000.00,
-  "servicePrice": 100000,
-  "HSDV": 1.2,
-  "HSovertime": 1.5,
-  "HScuoituan": 1.3,
-  "isWeekend": false,
-  "isHoliday": false,
-  "totalOvertimeHours": 1.0,
-  "totalNormalHours": 3.0,
-  "applicableWeekendCoefficient": 1.0,
-  "overtimeCost": 1.5,
-  "normalCost": 3.0
+  "totalCost": 450000,
+  "service": {
+    "title": "Dọn dẹp nhà cửa",
+    "coefficient_service": 1.2,
+    "coefficient_other": 1.1,
+    "coefficient_ot": 1.3,
+    "cost": 50000
+  },
+  "breakdown": {
+    "baseCost": 200000,
+    "serviceCoefficient": 1.2,
+    "timeCoefficient": 1.1,
+    "finalCost": 450000
+  }
 }
 ```
 
@@ -302,42 +304,7 @@
 - Trả về tất cả thông tin đơn hàng và lịch làm việc (schedules) tương ứng
 - Thời gian được chuyển đổi sang múi giờ Việt Nam (UTC+7) để hiển thị
 - Chỉ customer được phép xem đơn hàng của chính mình (kiểm tra quyền sở hữu)
-      "endTime": "2025-08-21T17:00:00.000Z",
-      "status": "pending",
-      "addressDetail": "Số 123, Đường ABC, Quận XYZ",
-      "schedules": [
-        {
-          "_id": "schedule_id_1",
-          "workingDate": "2025-08-20",
-          "startTime": "2025-08-20T08:00:00.000Z",
-          "endTime": "2025-08-20T12:00:00.000Z",
-          "helper_id": "notAvailable",
-          "cost": 250000,
-          "status": "pending",
-          "helper_cost": 180000
-        },
-        {
-          "_id": "schedule_id_2",
-          "workingDate": "2025-08-21",
-          "startTime": "2025-08-21T13:00:00.000Z",
-          "endTime": "2025-08-21T17:00:00.000Z",
-          "helper_id": "notAvailable",
-          "cost": 200000,
-          "status": "pending",
-          "helper_cost": 150000
-        }
-      ],
-      "paymentMethod": "cash"
-    }
-  ],
-  "pagination": {
-    "totalRequests": 5,
-    "totalPages": 1,
-    "currentPage": 1,
-    "limit": 10
-  }
-}
-```
+
 
 **Lưu ý:** 
 - Tất cả thời gian trả về cho client đều đã được chuyển đổi sang múi giờ Việt Nam (UTC+7)

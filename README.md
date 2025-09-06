@@ -150,6 +150,25 @@ Production: https://your-vercel-app.vercel.app
 Development: http://localhost:80
 ```
 
+### API Routes Overview
+
+| Route | Description |
+|-------|-------------|
+| `/auth/*` | Authentication endpoints |
+| `/customer/*` | Customer management |
+| `/helper/*` | Helper management |
+| `/request/*` | Request management |
+| `/requestDetail/*` | Request detail management |
+| `/service/*` | Service information |
+| `/blog/*` | Blog/news management |
+| `/location/*` | Location data |
+| `/costFactor/*` | Cost factor information |
+| `/general/*` | General settings |
+| `/policy/*` | Policies |
+| `/question/*` | FAQ |
+| `/discount/*` | Discount information |
+| `/notifications/*` | Notification management |
+
 ## 🔐 Authentication Endpoints
 
 ### 1. Đăng ký khách hàng
@@ -164,7 +183,13 @@ POST /auth/register/customer
   "phone": "0123456789",
   "password": "password123",
   "fullName": "Nguyễn Văn A",
-  "email": "example@email.com"
+  "email": "example@email.com",
+  "address": {
+    "province": "province_id",
+    "district": "district_id", 
+    "ward": "ward_id",
+    "detailAddress": "Số 123, Đường ABC"
+  }
 }
 ```
 
@@ -325,6 +350,7 @@ POST /request/calculateCost
     "title": "Dọn dẹp nhà cửa",
     "coefficient_service": 1.2,
     "coefficient_other": 1.1,
+    "coefficient_ot": 1.3,
     "cost": 50000
   },
   "totalCost": 264000,
@@ -337,7 +363,7 @@ POST /request/calculateCost
 }
 ```
 
-### 2. Tạo yêu cầu dịch vụ
+### 2. Tạo yêu cầu dịch vụ (Customer only)
 
 ```http
 POST /request
@@ -352,6 +378,7 @@ Content-Type: application/json
     "title": "Dọn dẹp nhà cửa",
     "coefficient_service": 1.2,
     "coefficient_other": 1.1,
+    "coefficient_ot": 1.3,
     "cost": 50000
   },
   "startTime": "2024-01-15T08:00:00.000Z",
@@ -372,14 +399,49 @@ Content-Type: application/json
 }
 ```
 
-### 3. Lấy danh sách yêu cầu của khách hàng
+### 3. Lấy danh sách yêu cầu của khách hàng (Customer only)
 
 ```http
 GET /request/{phone}
 Authorization: Bearer {accessToken}
 ```
 
-### 4. Hủy yêu cầu (Customer only)
+### 4. Lấy danh sách yêu cầu khả dụng (Helper only)
+
+```http
+GET /request
+Authorization: Bearer {accessToken}
+```
+
+**Response:**
+```json
+[
+  {
+    "_id": "request_id",
+    "service": {
+      "title": "Dọn dẹp nhà cửa"
+    },
+    "customerInfo": {
+      "fullName": "Nguyễn Văn A",
+      "phone": "0123456789"
+    },
+    "totalCost": 264000,
+    "orderDate": "2024-01-15",
+    "startTime": "2024-01-15T08:00:00.000Z",
+    "endTime": "2024-01-15T12:00:00.000Z",
+    "status": "pending"
+  }
+]
+```
+
+### 5. Lấy danh sách yêu cầu đã được gán (Helper only)
+
+```http
+GET /request/my-assigned
+Authorization: Bearer {accessToken}
+```
+
+### 6. Hủy yêu cầu (Customer only)
 
 ```http
 POST /request/cancel
@@ -394,7 +456,7 @@ Authorization: Bearer {accessToken}
 }
 ```
 
-### 5. Nhận việc (Helper only)
+### 7. Nhận việc (Helper only)
 
 ```http
 POST /request/assign
@@ -408,32 +470,73 @@ Authorization: Bearer {accessToken}
 }
 ```
 
-### 6. Từ chối việc (Helper only)
-
-```http
-POST /request/reject
-Authorization: Bearer {accessToken}
-```
-
-### 7. Bắt đầu làm việc (Helper only)
+### 8. Bắt đầu làm việc (Helper only)
 
 ```http
 POST /request/processing
 Authorization: Bearer {accessToken}
 ```
 
-### 8. Hoàn thành công việc (Helper only)
+**Request Body:**
+```json
+{
+  "requestId": "60f7b3b3b3b3b3b3b3b3b3b3"
+}
+```
+
+### 9. Hoàn thành công việc (Helper only)
 
 ```http
 POST /request/finish
 Authorization: Bearer {accessToken}
 ```
 
-### 9. Hoàn thành thanh toán (Helper only)
+**Request Body:**
+```json
+{
+  "requestId": "60f7b3b3b3b3b3b3b3b3b3b3"
+}
+```
+
+### 10. Hoàn thành thanh toán (Helper only)
 
 ```http
 POST /request/finishpayment
 Authorization: Bearer {accessToken}
+```
+
+**Request Body:**
+```json
+{
+  "requestId": "60f7b3b3b3b3b3b3b3b3b3b3"
+}
+```
+
+## 📋 RequestDetail Endpoints
+
+### 1. Lấy chi tiết yêu cầu theo IDs
+
+```http
+GET /requestDetail?ids=id1,id2,id3
+Authorization: Bearer {accessToken}
+```
+
+### 2. Đánh giá dịch vụ (Customer only)
+
+```http
+POST /requestDetail/review
+Authorization: Bearer {accessToken}
+```
+
+**Request Body:**
+```json
+{
+  "requestDetailId": "60f7b3b3b3b3b3b3b3b3b3b3",
+  "review": "Dịch vụ tốt, nhân viên nhiệt tình",
+  "rating": 5,
+  "loseThings": false,
+  "breakThings": false
+}
 ```
 
 ## 👨‍🔧 Helper Endpoints
@@ -448,25 +551,242 @@ GET /helper
 ```json
 [
   {
-    "id": "60f7b3b3b3b3b3b3b3b3b3b3",
+    "_id": "60f7b3b3b3b3b3b3b3b3b3b3",
     "fullName": "Trần Thị B",
     "phone": "0987654321",
     "avatar": "https://example.com/avatar.jpg",
-    "rating": 4.8,
-    "experience": "3 năm kinh nghiệm",
-    "services": ["Dọn dẹp", "Nấu ăn", "Chăm sóc người già"],
-    "isAvailable": true
+    "averageRating": 4.8,
+    "yearOfExperience": 3,
+    "experienceDescription": "3 năm kinh nghiệm",
+    "jobs": [
+      {
+        "serviceId": "service_id",
+        "title": "Dọn dẹp nhà cửa"
+      }
+    ],
+    "workingStatus": "online",
+    "status": "active"
   }
 ]
 ```
 
-### 2. Lấy thông tin chi tiết người giúp việc (Public)
+### 2. Lấy thông tin chi tiết helper (Public)
 
 ```http
 GET /helper/{id}
 ```
 
+### 3. Thay đổi trạng thái làm việc (Helper only)
+
+```http
+PATCH /helper/status
+Authorization: Bearer {accessToken}
+```
+
+**Request Body:**
+```json
+{
+  "workingStatus": "online" // "online", "offline", "working"
+}
+```
+
 ## 🛍 Service Endpoints
+
+### 1. Lấy danh sách dịch vụ (Public)
+
+```http
+GET /service
+```
+
+**Response:**
+```json
+[
+  {
+    "_id": "60f7b3b3b3b3b3b3b3b3b3b3",
+    "title": "Dọn dẹp nhà cửa",
+    "basicPrice": 50000,
+    "coefficient_id": "coeff_id",
+    "description": "Dịch vụ dọn dẹp nhà cửa chuyên nghiệp"
+  }
+]
+```
+
+### 2. Lấy thông tin chi tiết dịch vụ (Public)
+
+```http
+GET /service/{idOrTitle}
+```
+
+**Response:**
+```json
+{
+  "_id": "60f7b3b3b3b3b3b3b3b3b3b3",
+  "title": "Dọn dẹp nhà cửa",
+  "cost": 50000,
+  "coefficient_id": "coeff_id",
+  "description": "Dịch vụ dọn dẹp nhà cửa chuyên nghiệp"
+}
+```
+
+## 📰 Blog Endpoints
+
+### 1. Lấy danh sách blog (Public)
+
+```http
+GET /blog
+```
+
+**Response:**
+```json
+[
+  {
+    "_id": "60f7b3b3b3b3b3b3b3b3b3b3",
+    "title": "Tips dọn dẹp nhà hiệu quả",
+    "description": "Những mẹo hay để dọn dẹp nhà cửa nhanh chóng",
+    "img": "https://example.com/blog-image.jpg",
+    "content": "Nội dung blog...",
+    "author": "Admin",
+    "type": "Tips",
+    "date": "2024-01-15T10:30:00.000Z"
+  }
+]
+```
+
+### 2. Lấy chi tiết blog (Public)
+
+```http
+GET /blog/{id}
+```
+
+## 📍 Location Endpoints
+
+### 1. Lấy danh sách địa điểm (Public)
+
+```http
+GET /location
+```
+
+**Response:**
+```json
+[
+  {
+    "Province": "Hà Nội",
+    "Districts": [
+      {
+        "District": "Cầu Giấy",
+        "Wards": [
+          {"Ward": "Nghĩa Đô"},
+          {"Ward": "Dịch Vọng"}
+        ]
+      }
+    ]
+  }
+]
+```
+
+## � Cost Factor Endpoints
+
+### 1. Lấy tất cả hệ số chi phí
+
+```http
+GET /costFactor
+```
+
+### 2. Lấy hệ số cho dịch vụ
+
+```http
+GET /costFactor/service
+```
+
+### 3. Lấy hệ số khác
+
+```http
+GET /costFactor/other
+```
+
+## ⚙️ General Settings Endpoints
+
+### 1. Lấy cấu hình chung
+
+```http
+GET /general
+```
+
+**Response:**
+```json
+{
+  "openHour": "06:00",
+  "closeHour": "22:00",
+  "officeStartTime": "08:00",
+  "officeEndTime": "17:00",
+  "companyName": "Homecare Service",
+  "companyEmail": "contact@homecare.com",
+  "companyAddress": "123 Main St, Hanoi",
+  "companyPhone": "0123456789",
+  "holidayStartDate": "2024-01-01T00:00:00.000Z",
+  "holidayEndDate": "2024-01-03T23:59:59.000Z"
+}
+```
+
+## 📋 Policy Endpoints
+
+### 1. Lấy danh sách chính sách (Public)
+
+```http
+GET /policy
+```
+
+**Response:**
+```json
+[
+  {
+    "title": "Chính sách bảo mật",
+    "content": "Nội dung chính sách...",
+    "date": "2024-01-15T10:30:00.000Z"
+  }
+]
+```
+
+## ❓ Question Endpoints
+
+### 1. Lấy danh sách câu hỏi thường gặp (Public)
+
+```http
+GET /question
+```
+
+**Response:**
+```json
+[
+  {
+    "question": "Làm thế nào để đặt dịch vụ?",
+    "answer": "Bạn có thể đặt dịch vụ thông qua ứng dụng..."
+  }
+]
+```
+
+## 🎁 Discount Endpoints
+
+### 1. Lấy danh sách khuyến mãi (Public)
+
+```http
+GET /discount
+```
+
+**Response:**
+```json
+[
+  {
+    "_id": "60f7b3b3b3b3b3b3b3b3b3b3",
+    "title": "Giảm giá 20% cho khách hàng mới",
+    "description": "Áp dụng cho đơn hàng đầu tiên",
+    "rate": 0.2,
+    "applyStartDate": "2024-01-01T00:00:00.000Z",
+    "applyEndDate": "2024-12-31T23:59:59.000Z",
+    "usageLimit": 1000
+  }
+]
+```
 
 ### 1. Lấy danh sách dịch vụ (Public)
 
@@ -593,7 +913,6 @@ Authorization: Bearer {accessToken}
   phone: String,
   email: String,
   password: String,
-  signedUp: Boolean,
   points: [{
     point: Number,
     updateDate: Date
@@ -612,14 +931,12 @@ Authorization: Bearer {accessToken}
 ```javascript
 {
   orderDate: Date,
-  scheduleIds: Array,
+  scheduleIds: [{
+    type: mongoose.Schema.Types.ObjectId, 
+    ref: 'RequestDetail'
+  }],
   startTime: Date,
   endTime: Date,
-  comment: {
-    review: String,
-    loseThings: Boolean,
-    breakThings: Boolean
-  },
   customerInfo: {
     fullName: String,
     phone: String,
@@ -631,19 +948,256 @@ Authorization: Bearer {accessToken}
     title: String,
     coefficient_service: Number,
     coefficient_other: Number,
+    coefficient_ot: Number,
     cost: Number
   },
   totalCost: Number,
-  profit: Number,
-  status: String, // "notDone", "processing", "done", "cancelled"
+  status: String, // "pending", "assigned", "inProgress", "waitPayment", "completed", "cancelled"
   location: {
     province: String,
     district: String,
     ward: String
   },
+  createdBy: {
+    account_id: String,
+    createdAt: Date
+  },
+  updatedBy: [{
+    account_id: String,
+    updatedAt: Date
+  }],
+  deletedBy: {
+    account_id: String,
+    deletedAt: Date
+  },
+  timestamps: true
+}
+```
+
+### Helper Model
+```javascript
+{
+  helper_id: String,
+  fullName: String,
+  startDate: Date,
+  baseFactor: Number,
+  birthDate: Date,
+  phone: String,
+  birthPlace: String,
+  address: String,
+  jobs: Array,
+  yearOfExperience: Number,
+  experienceDescription: String,
+  avatar: String,
+  healthCertificates: Array,
+  gender: String,
+  nationality: String,
+  educationLevel: String,
+  height: Number,
+  weight: Number,
+  workingStatus: String, // "offline", "online", "working"
+  status: String, // "active", "inactive"
+  password: String,
+  averageRating: Number, // 0-5
   deleted: Boolean,
-  createdBy: String,
-  assignedTo: String,
+  createdBy: {
+    account_id: String,
+    createdAt: Date
+  },
+  updatedBy: [{
+    account_id: String,
+    updatedAt: Date
+  }],
+  deletedBy: {
+    account_id: String,
+    deletedAt: Date
+  },
+  timestamps: true
+}
+```
+
+### RequestDetail Model
+```javascript
+{
+  workingDate: Date,
+  startTime: Date,
+  endTime: Date,
+  helper_id: String,
+  cost: Number,
+  comment: {
+    review: String,
+    loseThings: Boolean,
+    breakThings: Boolean
+  },
+  status: String,
+  helper_cost: Number,
+  timestamps: true
+}
+```
+
+### Service Model
+```javascript
+{
+  title: String,
+  basicPrice: Number,
+  coefficient_id: String,
+  description: String,
+  status: String,
+  deleted: Boolean,
+  createdBy: {
+    account_id: String,
+    createdAt: Date
+  },
+  updatedBy: [{
+    account_id: String,
+    updatedAt: Date
+  }],
+  deletedBy: {
+    account_id: String,
+    deletedAt: Date
+  },
+  timestamps: true
+}
+```
+
+### Blog Model
+```javascript
+{
+  title: String,
+  description: String,
+  img: String,
+  desc_img: String,
+  content: String,
+  author: String,
+  type: String,
+  date: Date,
+  status: String,
+  deleted: Boolean,
+  createdBy: {
+    account_id: String,
+    createdAt: Date
+  },
+  updatedBy: [{
+    account_id: String,
+    updatedAt: Date
+  }],
+  deletedAt: Date,
+  timestamps: true
+}
+```
+
+### CostFactorType Model
+```javascript
+{
+  title: String,
+  description: String,
+  coefficientList: [{
+    title: String,
+    description: String,
+    value: Number,
+    deleted: Boolean,
+    status: String
+  }],
+  applyTo: String,
+  status: String,
+  deleted: Boolean,
+  createdBy: {
+    account_id: String,
+    createdAt: Date
+  },
+  updatedBy: [{
+    account_id: String,
+    updatedAt: Date
+  }],
+  deletedBy: {
+    account_id: String,
+    deletedAt: Date
+  },
+  timestamps: true
+}
+```
+
+### GeneralSetting Model
+```javascript
+{
+  id: String,
+  baseSalary: Number,
+  openHour: String,
+  closeHour: String,
+  officeStartTime: String,
+  officeEndTime: String,
+  companyName: String,
+  companyEmail: String,
+  companyAddress: String,
+  companyPhone: String,
+  holidayStartDate: Date,
+  holidayEndDate: Date,
+  timestamps: true
+}
+```
+
+### Question Model
+```javascript
+{
+  question: String,
+  answer: String,
+  date: Date,
+  status: String,
+  deleted: Boolean,
+  createdBy: {
+    account_id: String,
+    createdAt: Date
+  },
+  updatedBy: [{
+    account_id: String,
+    updatedAt: Date
+  }],
+  deletedAt: Date,
+  timestamps: true
+}
+```
+
+### Policy Model
+```javascript
+{
+  title: String,
+  content: String,
+  date: Date,
+  status: String,
+  deleted: Boolean,
+  createdBy: {
+    account_id: String,
+    createdAt: Date
+  },
+  updatedBy: [{
+    account_id: String,
+    updatedAt: Date
+  }],
+  deletedAt: Date,
+  timestamps: true
+}
+```
+
+### Discount Model
+```javascript
+{
+  title: String,
+  description: String,
+  usageLimit: Number,
+  applyStartDate: Date,
+  applyEndDate: Date,
+  rate: Number,
+  status: String,
+  deleted: Boolean,
+  createdBy: {
+    account_id: String,
+    createdAt: Date
+  },
+  updatedBy: [{
+    account_id: String,
+    updatedAt: Date
+  }],
+  deletedAt: Date,
   timestamps: true
 }
 ```
