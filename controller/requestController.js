@@ -144,6 +144,12 @@ async function calculateTotalCost (serviceTitle, startTime, endTime,workDate) {
     else if (start.isAfter(officeEnd)) {
         overtimeHours = totalHours;
     }
+    else{
+        if (end.isAfter(officeEnd)) {
+            overtimeHours += end.diff(officeEnd, 'hour', true);
+            end = officeEnd;
+        }
+    }
     console.log(`Overtime hours after morning check: ${overtimeHours}`);
 
 
