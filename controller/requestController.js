@@ -384,7 +384,7 @@ const requestController ={
             }
             
             await reqDetail.save()
-            .then(() => scheduleIds.push(reqDetail._id))
+            .then(() => scheduleIds.push(reqDetail._id.toString()))
             .catch(err => res.status(500).send(err));
         }
         

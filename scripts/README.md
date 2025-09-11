@@ -48,6 +48,41 @@ node scripts/resetDatabase.js
 ### Services (5 items)
 - Chăm sóc người cao tuổi
 - Chăm sóc trẻ em
+
+### 4. create_locations.js
+Script để quản lý dữ liệu locations (tỉnh/thành phố và quận/huyện).
+
+**Cách chạy:**
+```bash
+# Tạo dữ liệu locations mẫu
+node scripts/create_locations.js create
+
+# Xem danh sách tất cả locations
+node scripts/create_locations.js list
+
+# Xóa tất cả locations (có xác nhận)
+node scripts/create_locations.js clear
+```
+
+### 5. seed_basic_locations.js
+Script đơn giản để thêm một số location cơ bản vào database.
+
+**Cách chạy:**
+```bash
+node scripts/seed_basic_locations.js
+```
+
+## Dữ liệu Locations được tạo
+
+### Locations (8 tỉnh/thành phố chính)
+- Hà Nội (14 quận/huyện)
+- Hồ Chí Minh (19 quận/huyện) 
+- Đà Nẵng (8 quận/huyện)
+- Hải Phòng (15 quận/huyện)
+- Cần Thơ (9 quận/huyện)
+- Bắc Giang (10 huyện/thành phố)
+- Bắc Kạn (8 huyện/thành phố)
+- Bạc Liêu (7 huyện/thành phố)
 - Chăm sóc bệnh nhân
 - Dọn dẹp nhà cửa
 - Nấu ăn tại nhà

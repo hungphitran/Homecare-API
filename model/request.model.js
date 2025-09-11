@@ -7,9 +7,7 @@ const requestSchema = new mongoose.Schema({
     },
     scheduleIds: {
         type: Array,
-        default: [
-            { type: mongoose.Schema.Types.ObjectId, ref: 'RequestDetail' }
-        ]
+        default: []
     },
     startTime: Date,
     endTime: Date,
@@ -34,7 +32,6 @@ const requestSchema = new mongoose.Schema({
     },
     location: {
         province: String,
-        district: String,
         ward: String
     },
     createdBy: {

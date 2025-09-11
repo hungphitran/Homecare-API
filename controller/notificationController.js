@@ -1,6 +1,7 @@
 const { initFirebase } = require('../utils/firebase');
 const DeviceToken = require('../model/deviceToken.model');
 const NotificationHelper = require('../utils/notificationHelper');
+const Customer = require('../model/customer.model');
 const { checkNotificationHealth } = require('../utils/notifications');
 
 // Ensure Firebase is initialized
@@ -18,6 +19,18 @@ const notificationController = {
       const { token, userId, phone, platform } = req.body || {};
       if (!token) {
         return res.status(400).json({ success: false, message: 'Missing token' });
+      }
+      if(!userId){
+        if(!phone){
+          return res.status(400).json({ success: false, message: 'Either userId or phone is required' });
+        }
+        
+        const customer = await Customer.findOne({ phone });
+        if(!customer){
+          return res.status(400).json({ success: false, message: 'No customer found with the provided phone' });
+        }
+
+        userId = customer._id;
       }
 
       const update = {

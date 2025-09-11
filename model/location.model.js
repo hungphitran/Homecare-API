@@ -1,16 +1,11 @@
 const mongoose = require('mongoose');
 
 const locationSchema = new mongoose.Schema({
-    Name: String,
+    name: String,
     status: String,
-    Districts: [
+    wards: [
         {
-            Name: String,
-            Wards: [
-                {
-                    Name: String
-                }
-            ]
+            name: String,
         }
     ]
 }, {
