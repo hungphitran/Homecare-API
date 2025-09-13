@@ -16,7 +16,8 @@ const notificationController = {
   // Register or update a device token
   registerToken: async (req, res) => {
     try {
-      const { token, userId, phone, platform } = req.body || {};
+      let { token, userId, phone, platform } = req.body || {};
+      console.log('[REGISTER TOKEN] Request body:', req.body);
       if (!token) {
         return res.status(400).json({ success: false, message: 'Missing token' });
       }

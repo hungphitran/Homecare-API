@@ -215,70 +215,133 @@
 **Request Body:**
 ```json
 {
-  "requestId": "request_id_here"
+  "detailId": "requestDetail_id_here"
 }
 ```
 
 **Validation Rules:**
-- `requestId`: Bắt buộc, ID của request cần bắt đầu
-- Request phải có status = "assigned"
+- `detailId`: Bắt buộc, ID của requestDetail cần bắt đầu
+- RequestDetail phải có status = "assigned"
 
 **Response Success (200):**
 ```json
 {
-  "message": "Đã bắt đầu thực hiện công việc"
+  "success": true,
+  "message": "Work started successfully",
+  "requestDetail": {
+    "id": "requestDetail_id_here",
+    "status": "inProgress"
+  },
+  "request": {
+    "id": "request_id_here",
+    "status": "inProgress"
+  }
 }
 ```
 
 **Lưu ý:**
-- Chuyển trạng thái Request từ "assigned" -> "inProgress"
+- Chuyển trạng thái RequestDetail từ "assigned" -> "inProgress"
+- Request cha cũng sẽ chuyển sang "inProgress" nếu đang ở trạng thái "pending"
 - Hệ thống sẽ gửi thông báo cho customer khi helper bắt đầu làm việc
 
 ### 2.5 Hoàn thành công việc
 - **Endpoint**: `POST /request/finish`
-- **Description**: Đánh dấu hoàn thành công việc (chuyển trạng thái từ inProgress -> waitPayment)
+- **Description**: Đánh dấu hoàn thành công việc (chuyển trạng thái từ inProgress -> completed)
 - **Authentication**: Bắt buộc (helper only)
 
 **Request Body:**
 ```json
 {
-  "requestId": "request_id_here"
+  "detailId": "requestDetail_id_here",
+  "comment": {
+    "review": "Đã hoàn thành tốt công việc",
+    "loseThings": false,
+    "breakThings": false
+  }
 }
 ```
 
 **Validation Rules:**
-- `requestId`: Bắt buộc, ID của request cần hoàn thành
-- Request phải có status = "inProgress"
+- `detailId`: Bắt buộc, ID của requestDetail cần hoàn thành
+- RequestDetail phải có status = "inProgress"
+- `comment`: Không bắt buộc, thông tin bổ sung về công việc
+  - `review`: Không bắt buộc, nhận xét về công việc đã thực hiện (String)
+  - `loseThings`: Không bắt buộc, đánh dấu có mất đồ trong quá trình làm việc (Boolean, mặc định: false)
+  - `breakThings`: Không bắt buộc, đánh dấu có làm hỏng đồ trong quá trình làm việc (Boolean, mặc định: false)
 
 **Response Success (200):**
 ```json
 {
-  "message": "Đã hoàn thành công việc, chờ thanh toán"
+  "success": true,
+  "message": "RequestDetail completed successfully",
+  "requestDetail": {
+    "id": "requestDetail_id_here",
+    "status": "completed"
+  },
+  "request": {
+    "id": "request_id_here",
+    "status": "waitPayment",
+    "allDetailsCompleted": true
+  }
 }
 ```
 
-### 2.6 Hoàn thành thanh toán
+**Lưu ý:**
+- Chuyển trạng thái RequestDetail từ "inProgress" -> "completed"
+- Nếu tất cả RequestDetail của Request cha đều ở trạng thái "completed" hoặc "cancelled", Request sẽ chuyển thành "waitPayment"
+- Hệ thống sẽ gửi thông báo cho customer khi helper hoàn thành công việc
+- Helper có thể để lại thông tin về tình trạng công việc trong comment
+- Helper sẽ tự động chuyển về trạng thái "online" sau khi hoàn thành công việc
+
+### 2.6 Xác nhận thanh toán
 - **Endpoint**: `POST /request/finishpayment`
-- **Description**: Đánh dấu hoàn thành thanh toán (chuyển trạng thái từ waitPayment -> completed)
+- **Description**: Xác nhận đã nhận thanh toán (chuyển trạng thái từ waitPayment -> completed)
 - **Authentication**: Bắt buộc (helper only)
 
 **Request Body:**
 ```json
 {
-  "requestId": "request_id_here"
+  "id": "request_id_here"
 }
 ```
 
 **Validation Rules:**
-- `requestId`: Bắt buộc, ID của request cần hoàn thành thanh toán
+- `id`: Bắt buộc, ID của request cần xác nhận thanh toán
 - Request phải có status = "waitPayment"
 
 **Response Success (200):**
 ```json
 {
-  "message": "Đã hoàn thành thanh toán"
+  "success": true,
+  "message": "Payment confirmed and order completed successfully",
+  "order": {
+    "id": "request_id_here",
+    "status": "completed"
+  }
 }
 ```
+
+**Lưu ý:**
+- Chuyển trạng thái Request từ "waitPayment" -> "completed"
+- Hệ thống sẽ gửi thông báo cho customer khi helper xác nhận đã nhận thanh toán
+- Đây là bước cuối cùng trong quy trình xử lý đơn hàng
+
+## 3. Helper Management APIs
+
+### 3.1 Thay đổi trạng thái làm việc
+- **Endpoint**: `PATCH /helper/status`
+- **Description**: Thay đổi trạng thái làm việc của helper (online/offline/working)
+- **Authentication**: Bắt buộc (helper only)
+
+**Request Body:**
+```json
+{
+  "workingStatus": "online"
+}
+```
+
+**Validation Rules:**
+- `workingStatus`: Bắt buộc, giá trị hợp lệ: "online", "offline", "working"
 
 ## 3. Helper Management APIs
 
@@ -304,70 +367,50 @@
   "workingStatus": "online"
 }
 ```
+
+### 3.2 Lấy thông tin helper
+- **Endpoint**: `GET /helper/{id}`
+- **Description**: Lấy thông tin chi tiết của helper theo ID (Public API)
+- **Authentication**: Không cần
+
+**Response Success (200):**
+```json
 {
-  "detailId": "requestDetail_id_here",
-  "comment": {
-    "review": "Đã hoàn thành tốt công việc",
-    "loseThings": false,
-    "breakThings": false
+  "_id": "helper_id",
+  "fullName": "Trần Thị B",
+  "phone": "0987654321",
+  "email": "helper@example.com",
+  "address": "Địa chỉ helper",
+  "workingStatus": "online",
+  "rating": 4.5,
+  "totalOrders": 100,
+  "isActive": true
+}
+```
+
+### 3.3 Lấy danh sách helpers
+- **Endpoint**: `GET /helper`
+- **Description**: Lấy danh sách tất cả helpers (Public API)
+- **Authentication**: Không cần
+
+**Response Success (200):**
+```json
+[
+  {
+    "_id": "helper_id_1",
+    "fullName": "Trần Thị B",
+    "phone": "0987654321",
+    "workingStatus": "online",
+    "rating": 4.5,
+    "totalOrders": 100,
+    "isActive": true
   }
-}
+]
 ```
 
-**Validation Rules:**
-- `detailId`: Bắt buộc, ID của requestDetail cần hoàn thành
-- RequestDetail phải có status = "inProgress"
-- `comment`: Không bắt buộc, thông tin bổ sung về công việc
-  - `review`: Không bắt buộc, nhận xét về công việc đã thực hiện (String)
-  - `loseThings`: Không bắt buộc, đánh dấu có mất đồ trong quá trình làm việc (Boolean, mặc định: false)
-  - `breakThings`: Không bắt buộc, đánh dấu có làm hỏng đồ trong quá trình làm việc (Boolean, mặc định: false)
+## 4. Time Off APIs (Quản lý thời gian nghỉ)
 
-**Response Success (200):**
-```json
-{
-  "message": "Đã hoàn thành công việc, chờ thanh toán"
-}
-```
-
-**Lưu ý:**
-- Chuyển trạng thái RequestDetail từ "inProgress" -> "waitPayment"
-- Nếu tất cả RequestDetail của Request cha đều ở trạng thái "waitPayment", "completed", hoặc "cancelled", Request sẽ chuyển thành "waitPayment"
-- Hệ thống sẽ gửi thông báo cho customer khi helper hoàn thành công việc
-- Helper có thể để lại thông tin về tình trạng công việc trong comment (review, loseThings, breakThings)
-- Customer có thể xem và bổ sung đánh giá thông qua API riêng sau khi nhận dịch vụ
-
-### 2.6 Xác nhận thanh toán
-- **Endpoint**: `POST /request/finishpayment`
-- **Description**: Xác nhận đã nhận thanh toán (chuyển trạng thái từ waitPayment -> completed)
-- **Authentication**: Bắt buộc (helper only)
-
-**Request Body:**
-```json
-{
-  "detailId": "requestDetail_id_here"
-}
-```
-
-**Validation Rules:**
-- `detailId`: Bắt buộc, ID của requestDetail cần xác nhận thanh toán
-- RequestDetail phải có status = "waitPayment"
-
-**Response Success (200):**
-```json
-{
-  "message": "Đã xác nhận thanh toán"
-}
-```
-
-**Lưu ý:**
-- Chuyển trạng thái RequestDetail từ "waitPayment" -> "completed"
-- Nếu tất cả RequestDetail của Request cha đều có status = "completed", Request sẽ chuyển thành "completed"
-- Hệ thống sẽ gửi thông báo cho customer khi helper xác nhận đã nhận thanh toán
-- Đây là bước cuối cùng trong quy trình xử lý đơn hàng
-
-## 3. Time Off APIs (Quản lý thời gian nghỉ)
-
-### 3.1 Lấy danh sách thời gian nghỉ
+### 4.1 Lấy danh sách thời gian nghỉ
 - **Endpoint**: `GET /timeOff/{helper_id}`
 - **Description**: Lấy danh sách thời gian nghỉ của helper theo ID
 - **Authentication**: Bắt buộc
@@ -387,5 +430,3 @@
 ```
 
 **Lưu ý:** API này hiện tại chỉ hỗ trợ lấy danh sách thời gian nghỉ, chưa hỗ trợ tạo mới hoặc cập nhật.
-
-**Lưu ý:** Chỉ có thể hủy những đăng ký nghỉ có status = "pending"

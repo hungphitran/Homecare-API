@@ -394,118 +394,6 @@
 - Không thể hủy đơn hàng đã bắt đầu làm việc (status = "inProgress") hoặc đã hoàn thành
 - Khi hủy đơn hàng, tất cả các requestDetail liên quan cũng sẽ được hủy
 
-### 2.4 Đánh giá dịch vụ
-- **Endpoint**: `POST /requestDetail/review`
-- **Description**: Đánh giá và nhận xét về chất lượng dịch vụ đã hoàn thành
-- **Authentication**: Bắt buộc (customer only)
-
-**Request Body:**
-```json
-{
-  "detailId": "requestDetail_id_here",
-  "comment": {
-    "review": "Dịch vụ rất tốt, helper làm việc chuyên nghiệp và tận tâm",
-    "loseThings": false,
-    "breakThings": false
-  }
-}
-```
-
-**Validation Rules:**
-- `detailId`: Bắt buộc, ID của requestDetail cần đánh giá (phải có định dạng ObjectId hợp lệ)
-- RequestDetail phải có status = "completed" (đã hoàn thành)
-- Chỉ customer đặt đơn mới có thể đánh giá requestDetail của đơn hàng đó
-- `comment`: Không bắt buộc, thông tin đánh giá chi tiết
-  - `review`: Không bắt buộc, nhận xét bằng văn bản (String)
-  - `loseThings`: Không bắt buộc, đánh dấu có mất đồ hay không (Boolean, mặc định: false)
-  - `breakThings`: Không bắt buộc, đánh dấu có làm hỏng đồ hay không (Boolean, mặc định: false)
-
-**Response Success (200):**
-```json
-{
-  "message": "Review updated successfully"
-}
-```
-
-**Response Error (400 - Missing required field):**
-```json
-{
-  "error": "Missing required field",
-  "message": "detailId là bắt buộc"
-}
-```
-
-**Response Error (400 - Invalid ObjectId format):**
-```json
-{
-  "error": "Invalid ObjectId format",
-  "message": "detailId phải có định dạng ObjectId hợp lệ"
-}
-```
-
-**Response Error (400 - Invalid status):**
-```json
-{
-  "error": "Invalid status",
-  "message": "Chỉ có thể đánh giá các đơn hàng đã hoàn thành"
-}
-```
-
-**Response Error (403 - Access denied):**
-```json
-{
-  "error": "Access denied",
-  "message": "Bạn chỉ có thể đánh giá đơn hàng của chính mình"
-}
-```
-
-**Response Error (404 - RequestDetail not found):**
-```json
-{
-  "error": "RequestDetail not found",
-  "message": "Không tìm thấy chi tiết đơn hàng"
-}
-```
-
-**Response Error (404 - Request not found):**
-```json
-{
-  "error": "Request not found", 
-  "message": "Không tìm thấy đơn hàng chứa chi tiết này"
-}
-```
-
-**Lưu ý:**
-- Customer chỉ có thể đánh giá các requestDetail thuộc về đơn hàng của chính mình
-- RequestDetail phải có trạng thái "completed" (đã hoàn thành) mới có thể đánh giá
-- Có thể cập nhật từng thành phần của comment riêng biệt (chỉ gửi review, chỉ gửi loseThings, hoặc kết hợp)
-- API sử dụng phương pháp cập nhật từng trường để không ghi đè dữ liệu hiện có
-- Thông tin đánh giá sẽ được lưu vào trường `comment` trong requestDetail
-- Hệ thống sẽ kiểm tra quyền sở hữu thông qua số điện thoại trong JWT token
-
-**Ví dụ request body khác:**
-
-Chỉ cập nhật nhận xét văn bản:
-```json
-{
-  "detailId": "requestDetail_id_here",
-  "comment": {
-    "review": "Công việc hoàn thành tốt"
-  }
-}
-```
-
-Chỉ cập nhật thông tin mất/hỏng đồ:
-```json
-{
-  "detailId": "requestDetail_id_here", 
-  "comment": {
-    "loseThings": true,
-    "breakThings": false
-  }
-}
-```
-
 ## 3. Service APIs (Quản lý dịch vụ)
 
 ### 3.1 Lấy danh sách dịch vụ
@@ -647,9 +535,167 @@ Chỉ cập nhật thông tin mất/hỏng đồ:
 }
 ```
 
-## 6. Profile APIs (Quản lý hồ sơ)
+## 6. Blog APIs (Quản lý blog)
 
-### 6.1 Lấy thông tin hồ sơ
+### 6.1 Lấy danh sách blog
+- **Endpoint**: `GET /blog`
+- **Description**: Lấy danh sách tất cả blog/bài viết
+- **Authentication**: Không cần
+
+**Response Success (200):**
+```json
+[
+  {
+    "_id": "blog_id_1",
+    "title": "Hướng dẫn chăm sóc người già tại nhà",
+    "content": "Nội dung bài viết...",
+    "author": "Admin",
+    "createdAt": "2025-08-19T08:30:00.000Z",
+    "isActive": true
+  }
+]
+```
+
+### 6.2 Lấy chi tiết blog
+- **Endpoint**: `GET /blog/{id}`
+- **Description**: Lấy thông tin chi tiết của một blog theo ID
+- **Authentication**: Không cần
+
+**Response Success (200):**
+```json
+{
+  "_id": "blog_id_1",
+  "title": "Hướng dẫn chăm sóc người già tại nhà",
+  "content": "Nội dung bài viết đầy đủ...",
+  "author": "Admin",
+  "createdAt": "2025-08-19T08:30:00.000Z",
+  "updatedAt": "2025-08-20T10:00:00.000Z",
+  "isActive": true
+}
+```
+
+## 7. Discount APIs (Quản lý khuyến mãi)
+
+### 7.1 Lấy danh sách khuyến mãi
+- **Endpoint**: `GET /discount`
+- **Description**: Lấy danh sách tất cả khuyến mãi có sẵn cho customer
+- **Authentication**: Không cần
+
+**Response Success (200):**
+```json
+[
+  {
+    "_id": "discount_id_1",
+    "title": "Giảm giá 20% cho khách hàng mới",
+    "description": "Áp dụng cho đơn hàng đầu tiên",
+    "discountPercent": 20,
+    "maxDiscount": 100000,
+    "minOrderValue": 200000,
+    "startDate": "2025-08-01T00:00:00.000Z",
+    "endDate": "2025-12-31T23:59:59.000Z",
+    "isActive": true
+  }
+]
+```
+
+## 8. Policy APIs (Chính sách dịch vụ)
+
+### 8.1 Lấy danh sách chính sách
+- **Endpoint**: `GET /policy`
+- **Description**: Lấy danh sách tất cả chính sách dịch vụ
+- **Authentication**: Không cần
+
+**Response Success (200):**
+```json
+[
+  {
+    "_id": "policy_id_1",
+    "title": "Chính sách hủy đơn hàng",
+    "content": "Chi tiết chính sách hủy đơn hàng...",
+    "category": "cancellation",
+    "isActive": true
+  }
+]
+```
+
+## 9. Question APIs (Câu hỏi thường gặp)
+
+### 9.1 Lấy danh sách FAQ
+- **Endpoint**: `GET /question`
+- **Description**: Lấy danh sách câu hỏi thường gặp
+- **Authentication**: Không cần
+
+**Response Success (200):**
+```json
+[
+  {
+    "_id": "question_id_1",
+    "question": "Làm thế nào để đặt dịch vụ?",
+    "answer": "Bạn có thể đặt dịch vụ thông qua app hoặc website...",
+    "category": "booking",
+    "isActive": true
+  }
+]
+```
+
+## 10. General Settings APIs (Cài đặt chung)
+
+### 10.1 Lấy cài đặt chung
+- **Endpoint**: `GET /general`
+- **Description**: Lấy các thông số cài đặt chung của hệ thống
+- **Authentication**: Không cần
+
+**Response Success (200):**
+```json
+[
+  {
+    "_id": "setting_id_1",
+    "key": "service_radius",
+    "value": 10,
+    "description": "Bán kính phục vụ (km)",
+    "isActive": true
+  }
+]
+```
+
+## 11. RequestDetail APIs (Đánh giá chi tiết)
+
+### 11.1 Đánh giá dịch vụ chi tiết
+- **Endpoint**: `POST /requestDetail/review`
+- **Description**: Đánh giá và nhận xét về chất lượng dịch vụ đã hoàn thành
+- **Authentication**: Bắt buộc (customer only)
+
+**Request Body:**
+```json
+{
+  "detailId": "requestDetail_id_here",
+  "comment": {
+    "review": "Dịch vụ rất tốt, helper làm việc chuyên nghiệp và tận tâm",
+    "loseThings": false,
+    "breakThings": false
+  }
+}
+```
+
+**Validation Rules:**
+- `detailId`: Bắt buộc, ID của requestDetail cần đánh giá
+- RequestDetail phải có status = "completed" (đã hoàn thành)
+- Chỉ customer đặt đơn mới có thể đánh giá requestDetail của đơn hàng đó
+- `comment`: Không bắt buộc, thông tin đánh giá chi tiết
+  - `review`: Không bắt buộc, nhận xét bằng văn bản (String)
+  - `loseThings`: Không bắt buộc, đánh dấu có mất đồ hay không (Boolean, mặc định: false)
+  - `breakThings`: Không bắt buộc, đánh dấu có làm hỏng đồ hay không (Boolean, mặc định: false)
+
+**Response Success (200):**
+```json
+{
+  "message": "Review updated successfully"
+}
+```
+
+## 12. Profile APIs (Quản lý hồ sơ)
+
+### 12.1 Lấy thông tin hồ sơ
 - **Endpoint**: `GET /customer/{phone}`
 - **Description**: Lấy thông tin hồ sơ của khách hàng theo số điện thoại
 - **Authentication**: Bắt buộc (customer only, chỉ được xem hồ sơ của chính mình)
@@ -674,7 +720,7 @@ Chỉ cập nhật thông tin mất/hỏng đồ:
 }
 ```
 
-### 6.2 Cập nhật hồ sơ  
+### 12.2 Cập nhật hồ sơ  
 - **Endpoint**: `PATCH /customer/{phone}`
 - **Description**: Cập nhật thông tin hồ sơ của khách hàng
 - **Authentication**: Bắt buộc (customer only, chỉ được sửa hồ sơ của chính mình)

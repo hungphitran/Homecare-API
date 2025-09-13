@@ -12,7 +12,6 @@ const moment = require('moment');
 const timeUtils = require('../utils/timeUtils');
 const { notifyOrderStatusChange, notifyDetailStatusChange, notifyPaymentRequest } = require('../utils/notifications');
 
-const holidayUtils = require('../utils/holidays');
 const CostFactorType = require('../model/costFactorType.model');
 
 /**
@@ -154,11 +153,7 @@ async function calculateTotalCost (serviceTitle, startTime, endTime,workDate) {
 
 
     // determine if workDate is weekend or holiday
-    const dayOfWeek = dayjs(workDate).day();
-    console.log(`Day of week: ${dayOfWeek} (0=Sunday, 6=Saturday)`);
-    const isWeekend = (dayOfWeek === 0 || dayOfWeek === 6);
-    const isHoliday = holidayUtils.isHoliday(workDate);
-    console.log(`isWeekend: ${isWeekend}, isHoliday: ${isHoliday}`);
+
     
 
     //coefficient other
@@ -167,10 +162,19 @@ async function calculateTotalCost (serviceTitle, startTime, endTime,workDate) {
     if (!time_coefficient) {
         throw new Error("Cost factor settings not found");
     }
+
+    const dayOfWeek = dayjs(workDate).day();
+    console.log(`Day of week: ${dayOfWeek} (0=Sunday, 6=Saturday)`);
+    const isWeekend = (dayOfWeek === 0 || dayOfWeek === 6);
+    const isHoliday = time_coefficient.coefficientList[2].status == 'active'
+    console.log(`isWeekend: ${isWeekend}, isHoliday: ${isHoliday}`);
     const weekend_coef = time_coefficient.coefficientList[1].value || 1; // weekend
     const holiday_coef = time_coefficient.coefficientList[2].value || 1; // holiday
     const overtime_coef = time_coefficient.coefficientList[0].value || 1; // overtime
     const other_coef = isHoliday&&isWeekend ? Math.max(holiday_coef,weekend_coef) : (isHoliday ? holiday_coef : (isWeekend ? weekend_coef : 1));
+
+
+
 
     const service_coef = await CostFactorType.findOne({ applyTo: "service" })
     .select('coefficientList')
@@ -208,6 +212,78 @@ async function calculateTotalCost (serviceTitle, startTime, endTime,workDate) {
         overtimeCost: parseFloat((basicCost * service_coef * other_coef * overtimeHours * overtime_coef).toFixed(2)),
     }
   };
+
+
+async function calculateHelperCost (serviceTitle, startTime, endTime,workDate,coefficient_helper=1) {
+    if (!startTime || !endTime || !workDate || !serviceTitle) {
+        return 0;
+    }
+    const service = await Service.findOne({ title: serviceTitle })
+    .select('basicPrice coefficient_id')
+    // Fetch service details
+    const coefficient_service = await CostFactorType.findOne({ applyTo: "service" })
+    .select('coefficientList')
+    .then(data=>{
+        if (!data) {
+            throw new Error("Service cost factor settings not found");
+        }
+        const matchingCoefficient = data.coefficientList.find(
+            coef => coef._id.toString() == service.coefficient_id.toString()
+        );
+        if (matchingCoefficient) {
+            return parseFloat(matchingCoefficient.value);
+        } else {
+            console.warn(`Service coefficient not found for service: ${serviceTitle}`);
+            return 1; // default
+        }
+    })
+
+
+    
+    const coefficient_other = await CostFactorType.findOne({ applyTo: "other" })
+    .select('coefficientList')
+    const weekend_coef = coefficient_other.coefficientList[1].value || 1; // weekend
+    const holiday_coef = coefficient_other.coefficientList[2].value || 1; // holiday
+    const overtime_coef = coefficient_other.coefficientList[0].value || 1; // overtime
+    const generalSetting = await GeneralSetting.findOne({ id: "generalSetting" })
+        .select("officeStartTime officeEndTime baseSalary");
+
+    const officeStartHour = parseInt(moment(generalSetting.officeStartTime, "HH:mm").format("H"));
+    const officeEndHour = parseInt(moment(generalSetting.officeEndTime, "HH:mm").format("H"));
+
+    const startHour = startTime.getHours(); 
+    const endHour = endTime.getHours();
+
+    const totalHours = endHour - startHour; 
+
+    // Số giờ OT đầu ca
+    const otStartHours = startHour < officeStartHour
+        ? officeStartHour - startHour
+        : 0;
+
+    // Số giờ OT cuối ca
+    const otEndHours = endHour > officeEndHour
+        ? endHour - officeEndHour
+        : 0;
+
+    // Tổng giờ OT
+    const totalOtHours = otStartHours + otEndHours;
+
+    // Tổng giờ thường
+    const totalNormalHours = totalHours - totalOtHours;
+
+    // Tính lương
+    const totalCost =
+        generalSetting.baseSalary *
+        coefficient_service *
+        coefficient_helper *
+        (
+            (overtime_coef * totalOtHours) +
+            (max(holiday_coef,weekend_coef) * totalNormalHours)
+        );
+
+    return totalCost;
+}
 
 const requestController ={
     //POST a new request
@@ -750,6 +826,15 @@ const requestController ={
             if (request.status === "pending") {
                 request.status = "inProgress";
             }
+
+            schedule.helper_cost = await calculateHelperCost(
+                request.service.title,
+                schedule.startTime,
+                schedule.endTime,
+                schedule.workingDate,
+                helper.coefficient_id
+            );
+            console.log(`Calculated helper cost: ${schedule.helper_cost}`);
             
             // Save all changes
             await schedule.save()
@@ -761,7 +846,7 @@ const requestController ={
 
             try {
                 // Send detail notification when helper is assigned
-                await notifyDetailStatusChange(request, schedule, "assigned");
+                // await notifyDetailStatusChange(request, schedule, "assigned");
                 
                 const notificationResult = await notifyOrderStatusChange(request, "assigned");
                 
