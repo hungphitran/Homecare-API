@@ -32,34 +32,25 @@ async function mapAddressesWithLocationNames(addresses) {
             const provinceId = addr.province && mongoose.Types.ObjectId.isValid(String(addr.province))
                 ? String(addr.province)
                 : null;
-            const districtId = addr.district && mongoose.Types.ObjectId.isValid(String(addr.district))
-                ? String(addr.district)
-                : null;
             const wardId = addr.ward && mongoose.Types.ObjectId.isValid(String(addr.ward))
                 ? String(addr.ward)
                 : null;
 
             const provinceDoc = provinceId ? provinceMap.get(provinceId) : null;
-            if (provinceDoc && provinceDoc.Name) {
-                result.province = provinceDoc.Name;
+            if (provinceDoc && provinceDoc.name) {
+                result.province = provinceDoc.name;
             }
 
-            if (provinceDoc && Array.isArray(provinceDoc.Districts) && districtId) {
-                const districtDoc = provinceDoc.Districts.find(d => String(d._id) === districtId);
-                if (districtDoc && districtDoc.Name) {
-                    result.district = districtDoc.Name;
-                }
-                if (districtDoc && Array.isArray(districtDoc.Wards) && wardId) {
-                    const wardDoc = districtDoc.Wards.find(w => String(w._id) === wardId);
-                    if (wardDoc && wardDoc.Name) {
-                        result.ward = wardDoc.Name;
-                    }
+            if (provinceDoc && Array.isArray(provinceDoc.wards) && provinceId) {
+                const districtDoc = provinceDoc.wards.find(d => String(d._id) == wardId);
+                if (districtDoc && districtDoc.name) {
+                    result.ward = districtDoc.name;
                 }
             }
 
             return result;
         });
-
+        console.log('Mapped addresses:', mapped);
         return mapped;
     } catch (e) {
         console.error('mapAddressesWithLocationNames error:', e);

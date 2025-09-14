@@ -13,12 +13,14 @@ router.post('/processing', authenticateToken, requireHelper, requestController.s
 // Helper only - assignment and management
 router.post('/assign', authenticateToken, requireHelper, requestController.assign)
 // router.post('/reject', authenticateToken, requireHelper, requestController.rejectHelper)
+router.get('/test-helpercost',requestController.testHelperCost);
 
 // Customer can cancel their own requests
 router.post('/cancel', authenticateToken, requireCustomer, requestController.cancelRequest)
 
 // Admin/Helper can get all available requests (chưa có helper)
 router.get('/', authenticateToken, requireHelper, requestController.getAll);
+
 
 // Helper can get their assigned requests
 router.get('/my-assigned', authenticateToken, requireHelper, requestController.getMyAssignedRequests);

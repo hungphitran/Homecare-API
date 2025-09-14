@@ -245,14 +245,29 @@ async function calculateHelperCost (serviceTitle, startTime, endTime,workDate,co
     const weekend_coef = coefficient_other.coefficientList[1].value || 1; // weekend
     const holiday_coef = coefficient_other.coefficientList[2].value || 1; // holiday
     const overtime_coef = coefficient_other.coefficientList[0].value || 1; // overtime
+    
+    // Check if workDate is weekend or holiday (similar to calculateTotalCost)
+    const dayOfWeek = moment(workDate).day();
+    const isWeekend = (dayOfWeek === 0 || dayOfWeek === 6);
+    const isHoliday = coefficient_other.coefficientList[2].status == 'active';
+    const other_coef = isHoliday && isWeekend ? Math.max(holiday_coef, weekend_coef) : 
+                      (isHoliday ? holiday_coef : (isWeekend ? weekend_coef : 1));
+    
     const generalSetting = await GeneralSetting.findOne({ id: "generalSetting" })
         .select("officeStartTime officeEndTime baseSalary");
 
     const officeStartHour = parseInt(moment(generalSetting.officeStartTime, "HH:mm").format("H"));
     const officeEndHour = parseInt(moment(generalSetting.officeEndTime, "HH:mm").format("H"));
 
-    const startHour = startTime.getHours(); 
-    const endHour = endTime.getHours();
+    // Handle string time format like "HH:mm" similar to calculateTotalCost
+    let startHour, endHour;
+    if (typeof startTime === 'string') {
+        startHour = parseInt(startTime.split(':')[0]);
+        endHour = parseInt(endTime.split(':')[0]);
+    } else {
+        startHour = startTime.getHours(); 
+        endHour = endTime.getHours();
+    }
 
     const totalHours = endHour - startHour; 
 
@@ -272,17 +287,18 @@ async function calculateHelperCost (serviceTitle, startTime, endTime,workDate,co
     // Tổng giờ thường
     const totalNormalHours = totalHours - totalOtHours;
 
-    // Tính lương
+    // Tính lương với logic similar to calculateTotalCost
     const totalCost =
         generalSetting.baseSalary *
-        coefficient_service *
+        coefficient_service * // Chia 1000 để chuyển từ VND sang K VND
         coefficient_helper *
+        other_coef *
         (
             (overtime_coef * totalOtHours) +
-            (max(holiday_coef,weekend_coef) * totalNormalHours)
+            (totalNormalHours)
         );
 
-    return totalCost;
+    return Number.parseInt(totalCost);
 }
 
 const requestController ={
@@ -485,12 +501,13 @@ const requestController ={
             endTime: mainEndTimeObj,
             orderDate: new Date(`${standardizedOrderDate}T00:00:00.000Z`),
             scheduleIds: scheduleIds,
+            location: req.body.location,
             totalCost: totalCost, // Sử dụng tổng chi phí đã tính toán
-            helper_cost: 0, // Không có helper cost khi tạo đơn
             status: "pending"
         });
         
         await newOrder.save();
+        await notifyOrderStatusChange(newOrder, "pending");
         res.status(200).json({
             success: true,
             message: "Order created successfully",
@@ -1223,7 +1240,34 @@ const requestController ={
                 message: "Không thể tính toán chi phí"
             });
         }
-    }    
+    }    ,
+    testHelperCost: async (req, res, next) => {
+        console.log("Test helper cost endpoint hit with params:", req.query);
+        try {
+            const { serviceTitle, startTime, endTime, workDate,helper_coeff} = req.query;
+            if (!serviceTitle || !startTime || !endTime || !workDate ) {
+                return res.status(400).json({
+                    error: "Missing required parameters",
+                    message: "serviceTitle, startTime, endTime, workDate, and coefficientId are required"
+                });
+            }
+            if (!timeUtils.isValidTimeRange(startTime, endTime)) {
+                return res.status(400).json({
+                    error: "Invalid time range",
+                    message: "End time must be after start time"
+                });
+            }
+            let cost = await calculateHelperCost(serviceTitle, startTime, endTime, workDate,helper_coeff);
+
+            res.status(200).json({ helperCost: cost });
+        } catch (error) {
+            console.error("Error in testHelperCost:", error);
+            res.status(500).json({
+                error: "Internal server error",
+                message: "Cannot calculate helper cost"
+            });
+        }
+    }
 }
 
 module.exports = requestController;
