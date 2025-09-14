@@ -19,7 +19,7 @@ const authController = {
             }
 
             // Kiểm tra địa chỉ bắt buộc
-            if (!address || !address.province || !address.district || !address.ward || !address.detailAddress) {
+            if (!address || !address.province  || !address.ward || !address.detailAddress) {
                 return res.status(400).json({
                     error: 'Missing address information',
                     message: 'Vui lòng cung cấp đầy đủ thông tin địa chỉ (tỉnh/thành phố, quận/huyện, phường/xã, địa chỉ chi tiết)'
