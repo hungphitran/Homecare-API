@@ -184,7 +184,7 @@ const customerController ={
                 }
 
                 // Validate từng địa chỉ trong danh sách
-                const requiredAddrFields = ['province', 'district', 'ward', 'detailAddress'];
+                const requiredAddrFields = ['province', 'ward', 'detailAddress'];
                 const validatedAddresses = [];
 
                 for (let i = 0; i < addressList.length; i++) {
@@ -209,7 +209,6 @@ const customerController ={
                     // Chuẩn hóa địa chỉ
                     validatedAddresses.push({
                         province: addrObj.province.trim(),
-                        district: addrObj.district.trim(),
                         ward: addrObj.ward.trim(),
                         detailAddress: addrObj.detailAddress.trim()
                     });
