@@ -4,6 +4,8 @@ const GeneralSetting = require('../model/generalSetting.model')
 const Helper = require('../model/helper.model')
 const moment = require("moment");
 const mongoose = require('mongoose')
+const { sendToCustomerPhone } = require('../utils/notifications');
+
 
 const requestDetailController ={
     getByIds: async (req,res,next)=>{
@@ -145,6 +147,7 @@ const requestDetailController ={
             }
 
             await requestDetail.save();
+            await sendToCustomerPhone(req.customerInfo.phone,"Đánh giá đơn hàng thành công.","Bạn đã đánh giá đơn hàng thành công. Cảm ơn bạn đã sử dụng dịch vụ của chúng tôi!");
             
             res.status(200).json({ message: "Review updated successfully" });
         } catch (err) {
