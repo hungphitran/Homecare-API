@@ -102,7 +102,7 @@ async function populateHelperInfo(schedules) {
     // Get unique helper_ids from schedules
     const helperIds = [...new Set(schedules
         .map(schedule => schedule.helper_id)
-        .filter(id => id && id !== 'notAvailable')
+        .filter(id => id && id != 'notAvailable')
     )];
 
     if (helperIds.length === 0) {
@@ -112,16 +112,15 @@ async function populateHelperInfo(schedules) {
     try {
         // Fetch helper information
         const helpers = await Helper.find({ 
-            helper_id: { $in: helperIds },
+            _id: { $in: helperIds },
             deleted: { $ne: true }
-        }).select('_id helper_id fullName phone avatar averageRating');
+        }).select('_id fullName phone avatar averageRating');
 
         // Create a map for quick lookup
         const helperMap = {};
         helpers.forEach(helper => {
-            helperMap[helper.helper_id] = {
+            helperMap[helper._id] = {
                 _id: helper._id,
-                helper_id: helper.helper_id,
                 fullName: helper.fullName,
                 phone: helper.phone,
                 avatar: helper.avatar,
@@ -132,7 +131,7 @@ async function populateHelperInfo(schedules) {
         // Populate helper info in schedules
         return schedules.map(schedule => ({
             ...schedule,
-            helper: schedule.helper_id && schedule.helper_id !== 'notAvailable' 
+            helper: schedule.helper_id && schedule.helper_id != 'notAvailable' 
                 ? helperMap[schedule.helper_id] || null 
                 : null
         }));
@@ -387,12 +386,7 @@ const requestController ={
             let orderDate = req.body.orderDate;
             if (!orderDate && req.body.startTime) {
                 try {
-                    orderDate = timeUtils.extractDate(req.body.startTime);
-                    if (!orderDate) {
-                        // If extraction fails, use current date
-                        orderDate = new Date().toISOString().split('T')[0];
-                        console.warn("Could not extract date from startTime, using current date instead");
-                    }
+                    orderDate = new Date().toISOString().split('T')[0];
                 } catch (err) {
                     console.error("Error extracting date from startTime:", err);
                     // Fallback to current date
@@ -739,10 +733,8 @@ const requestController ={
                         _id: { $in: request.scheduleIds }
                     }).select('-__v -createdAt -updatedAt');
                     // sắp xếp ngày đặt gần nhất lên đầu
-                    
                     // Populate helper information for schedules
                     const schedulesWithHelperInfo = await populateHelperInfo(schedules.map(schedule => schedule.toObject()));
-                    
                     // Convert UTC times to Vietnam time for response
                     const requestWithVietnamTime = {
                         ...request.toObject(),
