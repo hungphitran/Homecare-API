@@ -50,6 +50,7 @@ const requestDetailController ={
     },    
     //update the request detail with the review
     postReview: async (req,res,next)=>{
+        console.log("Request body:", req.body);
         try {
             // Validate required fields
             if (!req.body.detailId) {
@@ -75,7 +76,6 @@ const requestDetailController ={
                     message: 'Không tìm thấy chi tiết đơn hàng'
                 });
             }
-
             // Check if RequestDetail status is "completed"
             if (requestDetail.status !== 'completed') {
                 return res.status(400).json({
@@ -95,8 +95,9 @@ const requestDetailController ={
             // Find the Request that contains this RequestDetail
             // Convert to ObjectId for proper comparison since scheduleIds contains ObjectIds
             const requestDetailObjectId = new mongoose.Types.ObjectId(requestDetail._id);
+            console.log("RequestDetail ObjectId:", requestDetail._id);
             const request = await Request.findOne({ 
-                scheduleIds: { $in: [requestDetailObjectId] }
+                scheduleIds: { $in: [req.body.detailId] }
             });
 
             if (!request) {
@@ -123,12 +124,12 @@ const requestDetailController ={
             }
             
             // Handle loseThings boolean
-            if (req.body.comment && req.body.comment.loseThings !== undefined) {
+            if (req.body.comment && req.body.comment.loseThings != undefined) {
                 commentData['comment.loseThings'] = req.body.comment.loseThings;
             }
             
             // Handle breakThings boolean
-            if (req.body.comment && req.body.comment.breakThings !== undefined) {
+            if (req.body.comment && req.body.comment.breakThings != undefined) {
                 commentData['comment.breakThings'] = req.body.comment.breakThings;
             }
 
@@ -147,7 +148,7 @@ const requestDetailController ={
             }
 
             await requestDetail.save();
-            await sendToCustomerPhone(req.customerInfo.phone,"Đánh giá đơn hàng thành công.","Bạn đã đánh giá đơn hàng thành công. Cảm ơn bạn đã sử dụng dịch vụ của chúng tôi!");
+            await sendToCustomerPhone(request.customerInfo.phone,"Đánh giá đơn hàng thành công.","Bạn đã đánh giá đơn hàng thành công. Cảm ơn bạn đã sử dụng dịch vụ của chúng tôi!");
             
             res.status(200).json({ message: "Review updated successfully" });
         } catch (err) {
