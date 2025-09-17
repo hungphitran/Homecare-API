@@ -90,6 +90,61 @@ function convertUTCToVietnamDate(utcDate) {
 }
 
 /**
+ * Helper function to populate helper information for requestDetails
+ * @param {Array} schedules - Array of requestDetail objects
+ * @returns {Array} schedules with populated helper information
+ */
+async function populateHelperInfo(schedules) {
+    if (!schedules || schedules.length === 0) {
+        return schedules;
+    }
+
+    // Get unique helper_ids from schedules
+    const helperIds = [...new Set(schedules
+        .map(schedule => schedule.helper_id)
+        .filter(id => id && id !== 'notAvailable')
+    )];
+
+    if (helperIds.length === 0) {
+        return schedules;
+    }
+
+    try {
+        // Fetch helper information
+        const helpers = await Helper.find({ 
+            helper_id: { $in: helperIds },
+            deleted: { $ne: true }
+        }).select('_id helper_id fullName phone avatar averageRating');
+
+        // Create a map for quick lookup
+        const helperMap = {};
+        helpers.forEach(helper => {
+            helperMap[helper.helper_id] = {
+                _id: helper._id,
+                helper_id: helper.helper_id,
+                fullName: helper.fullName,
+                phone: helper.phone,
+                avatar: helper.avatar,
+                averageRating: helper.averageRating
+            };
+        });
+
+        // Populate helper info in schedules
+        return schedules.map(schedule => ({
+            ...schedule,
+            helper: schedule.helper_id && schedule.helper_id !== 'notAvailable' 
+                ? helperMap[schedule.helper_id] || null 
+                : null
+        }));
+
+    } catch (error) {
+        console.error('Error populating helper info:', error);
+        // Return original schedules if error occurs
+        return schedules;
+    }
+}
+
+/**
  * Helper function to fix inconsistent datetime data
  * Ensures startTime and endTime use the same date as workingDate
  * Also ensures workingDate is at midnight (00:00:00)
@@ -566,14 +621,18 @@ const requestController ={
                         }
                         return false;
                     });
+                    
+                    // Populate helper information for filtered schedules
+                    const schedulesWithHelperInfo = await populateHelperInfo(filteredSchedules.map(schedule => schedule.toObject()));
+                    
                     // Convert UTC times to Vietnam time for response
                     const requestWithVietnamTime = {
                         ...request.toObject(),
                         orderDate: convertUTCToVietnamDate(request.orderDate),
                         startTime: convertUTCToVietnamTime(request.startTime),
                         endTime: convertUTCToVietnamTime(request.endTime),
-                        schedules: filteredSchedules.map(schedule => ({
-                            ...schedule.toObject(),
+                        schedules: schedulesWithHelperInfo.map(schedule => ({
+                            ...schedule,
                             startTime: convertUTCToVietnamTime(schedule.startTime),
                             endTime: convertUTCToVietnamTime(schedule.endTime),
                             workingDate: convertUTCToVietnamDate(schedule.workingDate)
@@ -632,9 +691,12 @@ const requestController ={
             });
             
             // Format response with proper time conversions
-            const requestsWithSchedules = requests.map(request => {
+            const requestsWithSchedules = await Promise.all(requests.map(async request => {
                 const requestId = request._id.toString();
                 const mySchedules = schedulesByRequestId[requestId] || [];
+                
+                // Populate helper information for schedules
+                const schedulesWithHelperInfo = await populateHelperInfo(mySchedules);
                 
                 // Convert UTC times to Vietnam time for response
                 return {
@@ -642,16 +704,19 @@ const requestController ={
                     orderDate: convertUTCToVietnamDate(request.orderDate),
                     startTime: convertUTCToVietnamTime(request.startTime),
                     endTime: convertUTCToVietnamTime(request.endTime),
-                    schedules: mySchedules.map(schedule => ({
+                    schedules: schedulesWithHelperInfo.map(schedule => ({
                         ...schedule,
                         startTime: convertUTCToVietnamTime(schedule.startTime),
                         endTime: convertUTCToVietnamTime(schedule.endTime),
                         workingDate: convertUTCToVietnamDate(schedule.workingDate)
                     }))
                 };
-            }).filter(req => req.schedules && req.schedules.length > 0); // Only include requests with schedules
+            }));
+            
+            // Only include requests with schedules
+            const validRequests = requestsWithSchedules.filter(req => req.schedules && req.schedules.length > 0);
 
-            res.status(200).json(requestsWithSchedules);
+            res.status(200).json(validRequests);
         } catch (err) {
             console.error('Error in getMyAssignedRequests:', err);
             res.status(500).json({
@@ -675,18 +740,23 @@ const requestController ={
                     }).select('-__v -createdAt -updatedAt');
                     // sắp xếp ngày đặt gần nhất lên đầu
                     
+                    // Populate helper information for schedules
+                    const schedulesWithHelperInfo = await populateHelperInfo(schedules.map(schedule => schedule.toObject()));
+                    
                     // Convert UTC times to Vietnam time for response
                     const requestWithVietnamTime = {
                         ...request.toObject(),
                         orderDate: convertUTCToVietnamDate(request.orderDate),
                         startTime: convertUTCToVietnamTime(request.startTime),
                         endTime: convertUTCToVietnamTime(request.endTime),
-                        schedules: schedules.map(schedule => ({
-                            ...schedule.toObject(),
+                        schedules: schedulesWithHelperInfo.map(schedule => ({
+                            ...schedule,
                             startTime: convertUTCToVietnamTime(schedule.startTime),
                             endTime: convertUTCToVietnamTime(schedule.endTime),
-                            workingDate: convertUTCToVietnamDate(schedule.workingDate)
+                            workingDate: convertUTCToVietnamDate(schedule.workingDate),
+                            comment: schedule.comment || null
                         }))
+
                     };
                     
                     return requestWithVietnamTime;

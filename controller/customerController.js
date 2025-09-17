@@ -38,19 +38,24 @@ async function mapAddressesWithLocationNames(addresses) {
 
             const provinceDoc = provinceId ? provinceMap.get(provinceId) : null;
             if (provinceDoc && provinceDoc.name) {
-                result.province = provinceDoc.name;
+                result.province = {
+                    name:provinceDoc.name,
+                    id: provinceDoc._id
+                };
             }
 
             if (provinceDoc && Array.isArray(provinceDoc.wards) && provinceId) {
                 const districtDoc = provinceDoc.wards.find(d => String(d._id) == wardId);
                 if (districtDoc && districtDoc.name) {
-                    result.ward = districtDoc.name;
+                    result.ward = {
+                        name: districtDoc.name,
+                        id: districtDoc._id
+                    };
                 }
             }
 
             return result;
         });
-        console.log('Mapped addresses:', mapped);
         return mapped;
     } catch (e) {
         console.error('mapAddressesWithLocationNames error:', e);
@@ -75,26 +80,6 @@ const customerController ={
             return res.status(500).json({ error: 'Internal server error' });
         }
     },
-    // getAll: async (req,res,next)=>{
-    //     try {
-    //         const data = await Customer.find({})
-    //             .select('-password -__v -deleted -createdBy -updatedBy -deletedBy')
-    //             .lean();
-
-    //         // Batch map: collect all addresses then map per customer using one province fetch per invocation inside helper
-    //         const result = await Promise.all(
-    //             data.map(async (c) => ({
-    //                 ...c,
-    //                 addresses: await mapAddressesWithLocationNames(c.addresses)
-    //             }))
-    //         );
-
-    //         return res.status(200).json(result);
-    //     } catch (err) {
-    //         console.error('getAll customers error:', err);
-    //         return res.status(500).json({ error: 'Internal server error' });
-    //     }
-    // },
     update: async(req,res,next)=>{
         try {
             const { phone } = req.params;

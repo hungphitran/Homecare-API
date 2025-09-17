@@ -1,9 +1,11 @@
 const Customer = require('../model/customer.model');
 const Helper = require('../model/helper.model');
+const Location = require('../model/location.model');
 const { generateToken, generateRefreshToken } = require('../middleware/auth');
 const { getUserRole, getUserWithRole } = require('../utils/roleUtils');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+const { database } = require('firebase-admin');
 
 const authController = {
     // Đăng ký cho customer
@@ -34,6 +36,21 @@ const authController = {
                     message: 'Số điện thoại này đã được đăng ký'
                 });
             }
+
+            //map province, ward from names to their IDs
+            let province = await Location.findOne({name:address.province})
+            console.log('Found province:', province);
+            let ward = province.wards.find(w => w.name === address.ward)
+            if(!province || !ward) {
+                return res.status(400).json({   
+                    error: 'Invalid address',
+                    message: 'Địa chỉ không hợp lệ, vui lòng kiểm tra lại tỉnh/thành phố và quận/huyện'
+                });
+            }
+            
+            console.log('Mapped province and ward:', province, ward);
+            address.province = province._id;
+            address.ward = ward._id;
 
             // Hash password
             const saltRounds = 10;

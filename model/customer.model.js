@@ -13,8 +13,8 @@ const CustomerSchema = new mongoose.Schema({
     ],
     addresses: [
         {
-            province: String,
-            ward: String,
+            province: String,//id of province
+            ward: String,//id of ward in province
             detailAddress: String
         }
     ]
