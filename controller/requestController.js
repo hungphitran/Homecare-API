@@ -892,7 +892,8 @@ const requestController ={
             helper.workingStatus = "working";            
             // Find parent request for notification
             console.log('Looking for request with scheduleId:', schedule._id);
-            const request = await Request.findOne({ scheduleIds: { $in: [schedule._id] } })
+            const detail_id_str = schedule._id.toString();
+            const request = await Request.findOne({ scheduleIds: { $in: [detail_id_str] } })
             .populate("scheduleIds");
             
             console.log('Found request:', request ? request._id : 'null');
