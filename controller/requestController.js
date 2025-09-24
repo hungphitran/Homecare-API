@@ -104,7 +104,7 @@ async function populateHelperInfo(schedules) {
         .map(schedule => schedule.helper_id)
         .filter(id => id && id != 'notAvailable')
     )];
-
+    console.log('Unique helper IDs to fetch:', helperIds);
     if (helperIds.length === 0) {
         return schedules;
     }
@@ -658,20 +658,21 @@ const requestController ={
                 // status: { $in: ['assigned', 'inProgress', 'waitPayment'] }
             }).select('-__v -createdAt -updatedAt').lean();
 
+
             // Extract all the request detail IDs
-            const detailIds = myRequestDetails.map(detail => detail._id);
-            
+            const detailIds = myRequestDetails.map(detail => detail._id.toString());
+            console.log("My assigned request detail IDs:", detailIds);
             // More efficient approach: Find requests containing these schedules in a single query
             const requests = await Request.find({
                 scheduleIds: { $in: detailIds }
             }).select('-__v -createdBy -updatedBy -deletedBy -deleted -profit -createdAt -updatedAt').lean();
-            
             // Optimize by grouping schedules by request ID
             const schedulesByRequestId = {};
             myRequestDetails.forEach(schedule => {
                 // Find which request this schedule belongs to
-                const request = requests.find(req => 
-                    req.scheduleIds && req.scheduleIds.some(sid => 
+                console.log(`Processing schedule ID: ${schedule._id}`);
+                const request = requests.find(r => 
+                    r.scheduleIds && r.scheduleIds.some(sid => 
                         sid.toString() == schedule._id.toString()
                     )
                 );
@@ -683,7 +684,7 @@ const requestController ={
                     schedulesByRequestId[requestId].push(schedule);
                 }
             });
-            
+            console.log(`Grouped schedules by request ID:`, Object.keys(schedulesByRequestId).length, 'requests found');
             // Format response with proper time conversions
             const requestsWithSchedules = await Promise.all(requests.map(async request => {
                 const requestId = request._id.toString();
