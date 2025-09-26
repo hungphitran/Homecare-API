@@ -1062,7 +1062,7 @@ const requestController ={
             }
 
             // Find parent request for this detail
-            const request = await Request.findOne({ scheduleIds: { $in: [detail._id] } })
+            const request = await Request.findOne({ scheduleIds: { $in: [detail._id.toString()] } })
             .populate("scheduleIds")
             .then((data)=>data)
                     
