@@ -1082,10 +1082,14 @@ const requestController ={
                 
                 // Update detail status
                 detail.status ="completed";
+                // Save all changes together
+                await detail.save();
+                let detailIds = request.scheduleIds.map(id => new mongoose.Types.ObjectId(id));
 
                 // Check if all details are completed for parent request status update
-                const details = await RequestDetail.find({ _id: { $in: request.scheduleIds } }).select('status');
-                const allCompleted = details.every(d => [ 'completed','cancelled'].includes(d.status));
+                const details = await RequestDetail.find({ _id: { $in: detailIds } }).select('status');
+                console.log(`All detail statuses for request ${request._id}:`, details);
+                const allCompleted = details.every(d => ['completed','cancelled'].includes(d.status));
                 const prev = request.status;
                 
                 // Update parent request status to waitPayment if all details are completed
@@ -1100,8 +1104,7 @@ const requestController ={
                     helper.workingStatus = "online";
                 }
                 
-                // Save all changes together
-                await detail.save();
+
                 await request.save();
                 if(helper){
                     await helper.save()
