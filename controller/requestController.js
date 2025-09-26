@@ -684,7 +684,6 @@ const requestController ={
                     schedulesByRequestId[requestId].push(schedule);
                 }
             });
-            console.log(`Grouped schedules by request ID:`, Object.keys(schedulesByRequestId).length, 'requests found');
             // Format response with proper time conversions
             const requestsWithSchedules = await Promise.all(requests.map(async request => {
                 const requestId = request._id.toString();
@@ -976,7 +975,7 @@ const requestController ={
             }
             
             // Find parent request for this detail
-            const request = await Request.findOne({ scheduleIds: { $in: [detail._id] } })
+            const request = await Request.findOne({ scheduleIds: { $in: [detail._id.toString()] } })
             .populate("scheduleIds")
             .then((data)=>data)
             .catch((err)=> res.status(500).json(err));
