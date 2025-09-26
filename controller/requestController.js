@@ -1090,12 +1090,8 @@ const requestController ={
                 
                 // Update parent request status to waitPayment if all details are completed
                 if (allCompleted && request.status != 'waitPayment') {
-                    // Validate request status transition
-                    if (!isValidStatusTransition(request.status, "waitPayment", "request")) {
-                        console.warn(`Invalid request status transition from ${request.status} to waitPayment`);
-                    } else {
-                        request.status = 'waitPayment';
-                    }
+                    
+                    request.status = 'waitPayment';
                 }
                 
                 // Get helper to update status
@@ -1106,9 +1102,7 @@ const requestController ={
                 
                 // Save all changes together
                 await detail.save();
-                if (prev !== request.status) {
-                    await request.save();
-                }
+                await request.save();
                 if(helper){
                     await helper.save()
                     .catch(err=>console.warn("Cannot update helper status to online:", err));
