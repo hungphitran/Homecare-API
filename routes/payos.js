@@ -1,0 +1,11 @@
+const express = require("express");
+const payOS = require("../controller/payosController");
+const { authenticateToken, requireHelper, requireCustomer, requireOwnership } = require('../middleware/auth')
+
+
+const router = express.Router();
+
+router.post("/create-payment-link", payOS.createPaymentLink);
+router.post("/webhook", payOS.webhook);
+
+module.exports = router;

@@ -14,6 +14,7 @@ const notificationRouter = require('./notification')
 const generalRouter = require('./general')
 const policyRouter = require('./policy')
 const questionRouter = require('./question')
+const payosRouter = require('./payos')
 
 // Authentication routes
 router.use('/auth', authRouter)
@@ -30,4 +31,5 @@ router.use('/general', generalRouter);
 router.use('/policy', policyRouter);
 router.use('/question', questionRouter);
 router.use('/notifications', notificationRouter);
+router.use('/payment', payosRouter);
 module.exports = router;
