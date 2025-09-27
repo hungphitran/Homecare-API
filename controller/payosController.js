@@ -3,6 +3,7 @@ const payOS = require("../config/payos");
 const Request = require('../model/request.model')
 const RequestDetail = require('../model/requestDetail.model')
 const mongoose = require('mongoose');
+const { v4: uuidv4 } = require('uuid');
 const payosController = {
     createPaymentLink: async (req, res) => {
         let request = await Request.findOne({ _id: new mongoose.Types.ObjectId( req.body.requestId )  })
@@ -13,7 +14,7 @@ const payosController = {
         let amount =0
 
         for(let scheduleId of request.scheduleIds){
-            let schedule = await RequestDetail.find({
+            let schedule = await RequestDetail.findOne({
                 _id: new mongoose.Types.ObjectId(scheduleId),
                  status:'completed'})
             if(schedule){
@@ -23,15 +24,15 @@ const payosController = {
         if(amount == 0 || !amount){
             return res.status(400).json({ error: 'Yêu cầu không có chi phí để thanh toán' });
         }
-
         payOS.paymentRequests.create({
-            orderCode: req.body.requestId || Date.now(), // cần unique
-            amount: amount,
-            description: req.body.description || "Thanh toán đơn hàng",
+            orderCode: Date.now() + Math.floor(Math.random() * 1000),
+            // amount: amount,
+            amount: 10000, // test
+            description: req.body.requestId,
             returnUrl: `${req.body.fe_host}/payment-success`,
             cancelUrl: `${req.body.fe_host}/payment-cancel`,
         }).then(paymentLink => {
-            res.json(paymentLink);
+            res.status(200).json(paymentLink);
         }).catch(err => {
             console.error(err);
             res.status(500).json({ error: err.message });
@@ -39,15 +40,13 @@ const payosController = {
     },
     webhook: async (req, res) => {
         try {
-            const valid = await payOS.verifyPaymentWebhookData(req.body);
+            const valid = await payOS.webhooks.verify(req.body);
             if (!valid) return res.status(400).send('Invalid');
-
+            console.log('Webhook received:', req.body);
             // Cập nhật trạng thái đơn hàng
-            const { orderCode, status } = req.body;
-            if (status === 'PAID') {
-            // mark order as paid in DB
-            console.log(`Order ${orderCode} marked as PAID`);
-                let request = await Request.findOne({ _id: new mongoose.Types.ObjectId(orderCode)  })
+            const { description, status } = req.body;
+
+                let request = await Request.findOne({ _id: new mongoose.Types.ObjectId(description)  })
                 if (request) {
                     request.status = 'completed';
                     await request.save();
@@ -55,17 +54,10 @@ const payosController = {
                 else{
                     console.log(`Order ${orderCode} not found in DB`);
                 }
-                
-            } else if (status === 'FAILED') {
-            // mark order as failed in DB
-            console.log(`Order ${orderCode} marked as FAILED`);
-            }
-            res.status(200).send('OK');
         } catch (err) {
         console.error(err);
             res.status(500).send('Internal Server Error');
         }        
-        console.log("Received webhook event:", event);
         // Xử lý sự kiện từ PayOS ở đây
         res.status(200).send('OK');
     }
