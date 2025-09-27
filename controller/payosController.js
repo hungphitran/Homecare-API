@@ -17,20 +17,10 @@ const payosController = {
         });
     },
     webhook: async (req, res) => {
-  try {
-    const verified = payOS.verifyPaymentWebhookData(req.body);
-
-    if (verified) {
-      console.log("Thanh toán thành công:", req.body);
-      // TODO: cập nhật DB, trạng thái đơn hàng...
-      res.sendStatus(200);
-    } else {
-      res.status(400).json({ message: "Dữ liệu không hợp lệ" });
-    }
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Webhook lỗi" });
-  }
+        const event = req.body;
+        console.log("Received webhook event:", event);
+        // Xử lý sự kiện từ PayOS ở đây
+        res.status(200).send('OK');
     }
 };
 module.exports = payosController
