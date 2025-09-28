@@ -450,7 +450,8 @@ const requestController ={
             });
         }
         
-        let service = await Service.findOne({title:req.body.service.title}).select("coefficient_id")
+        let service = await Service.findOne({title:req.body.service.title})
+        .select("coefficient_id")
         if (!service) {
             return res.status(404).json({
                 success: false,
@@ -480,9 +481,19 @@ const requestController ={
         }
 
         let scheduleIds = [];
-        let totalCost = req.body.totalCost; // Tổng chi phí dịch vụ
-        
-        // Mặc định không có helper khi tạo đơn hàng
+        // let totalCost = req.body.totalCost; // Tổng chi phí dịch vụ
+        let totalCost = 0; // Tổng chi phí dịch vụ
+        let result_calculated = await calculateTotalCost(req.body.service.title, standardizedStartTime, standardizedEndTime, finalWorkingDates[0]);
+        if (result_calculated.totalOvertimeHours > 0) {
+            req.body.service.coefficient_ot = result_calculated.HSovertime;
+        }
+        else
+        {
+            req.body.service.coefficient_ot = 1;
+        }
+        req.body.service.cost = result_calculated.servicePrice;
+
+            // Mặc định không có helper khi tạo đơn hàng
         // Helper sẽ được gán sau này thông qua endpoint assign
         
         for (let workingDate of finalWorkingDates) {
