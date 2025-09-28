@@ -11,7 +11,7 @@ const dayjs = require('dayjs');
 const moment = require('moment');
 const timeUtils = require('../utils/timeUtils');
 const { notifyOrderStatusChange, notifyDetailStatusChange, notifyPaymentRequest } = require('../utils/notifications');
-
+const { notifyHelperJobAssigned } = require('../utils/helperNotifications');
 const CostFactorType = require('../model/costFactorType.model');
 
 /**
@@ -929,7 +929,7 @@ const requestController ={
                 // await notifyDetailStatusChange(request, schedule, "assigned");
                 
                 const notificationResult = await notifyOrderStatusChange(request, "assigned");
-                
+                await notifyHelperJobAssigned(request,helper, schedule);
                 return res.status(200).json({
                     message: "Successfully assigned to requestDetail",
                     requestDetail: {

@@ -10,6 +10,7 @@ const requestDetailRouter = require('./requestDetail')
 const costFactorRouter = require('./costFactor')
 const authRouter = require('./auth') // Thêm auth router
 const notificationRouter = require('./notification')
+const helperNotificationRouter = require('./helperNotification')
 
 const generalRouter = require('./general')
 const policyRouter = require('./policy')
@@ -31,5 +32,6 @@ router.use('/general', generalRouter);
 router.use('/policy', policyRouter);
 router.use('/question', questionRouter);
 router.use('/notifications', notificationRouter);
+router.use('/helper-notifications', helperNotificationRouter);
 router.use('/payment', payosRouter);
 module.exports = router;
