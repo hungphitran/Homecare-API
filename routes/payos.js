@@ -8,6 +8,7 @@ const router = express.Router();
 
 router.post("/create-payment-link", payOS.createPaymentLink);
 router.post("/webhook", payOS.webhook);
+router.post('/checkpayment', payOS.checkPaymentStatus);
 
 
 module.exports = router;

@@ -494,10 +494,71 @@ async function notifyPaymentRequest(request, extraData = {}) {
   }
 }
 
+async function notifySuccessfulPayment(request, extraData = {}) {
+  const startTime = new Date();
+  console.log(`[NOTIFICATION] ========== START PAYMENT SUCCESS NOTIFICATION PROCESS ==========`);
+  console.log(`[NOTIFICATION] Timestamp: ${startTime.toISOString()}`)
+
+  if (!request || !request.customerInfo || !request.customerInfo.phone) {
+    console.error('[NOTIFICATION] ❌ VALIDATION FAILED: Missing customer phone in request:', request?._id);
+    return {
+      success: false,
+      message: 'Missing customer phone',
+      requestId: request?._id || 'unknown',
+      phone: 'not provided'
+    };
+  }
+  const title = 'Thanh toán thành công';
+  const body = `Cảm ơn bạn đã thanh toán cho đơn ${request._id}. Chúng tôi rất vui được phục vụ bạn!`;
+  const data = {
+    requestId: String(request._id),
+    status: 'completed',
+    screen: 'RequestDetail',
+    ...extraData,
+  };
+  console.log(`[NOTIFICATION] 📋 PAYMENT SUCCESS NOTIFICATION DETAILS:`)
+  console.log(`- Request ID: ${request._id}`)
+  console.log(`- Customer Phone: ${request.customerInfo.phone}`)
+  console.log(`- Title: ${title}`)
+  console.log(`- Body: ${body}`)
+  console.log(`- Data payload:`, JSON.stringify(data, null, 2))
+  try {
+    console.log(`[NOTIFICATION] 🚀 Calling sendToCustomerPhone...`)
+    const result = await sendToCustomerPhone(request.customerInfo.phone, title, body, data)
+    const endTime = new Date()
+    const duration = endTime.getTime() - startTime.getTime()
+    if (result.success) {
+      console.log(`[NOTIFICATION] ✅ SUCCESS - Payment success notification sent successfully!`)
+      console.log(`[NOTIFICATION] Duration: ${duration}ms`)
+      } else {
+        console.error(`[NOTIFICATION] ❌ FAILED - Payment success notification could not be sent`)
+        console.error(`[NOTIFICATION] Error: ${result.message}, Duration: ${duration}ms`)
+        }
+        console.log(`[NOTIFICATION] ========== END PAYMENT SUCCESS NOTIFICATION PROCESS ==========\n`)
+        return result
+        } catch (error) {
+        const endTime = new Date()
+        const duration = endTime.getTime() - startTime.getTime()
+        console.error(`[NOTIFICATION] 💥 EXCEPTION during payment success notification sending:`)
+        console.error(`- Phone: ${request.customerInfo.phone}`)
+        console.error(`- Duration: ${duration}ms`)
+        console.error(`- Error:`, error)
+        console.error(`[NOTIFICATION] ========== END PAYMENT SUCCESS NOTIFICATION PROCESS (WITH ERROR) ==========\n`)
+        return {
+        success: false,
+        message: `Exception: ${error.message}`,
+        phone: request.customerInfo.phone,
+        requestId: request._id,
+        error: error
+    }
+  }
+}
+
 module.exports = {
   sendToCustomerPhone,
   notifyOrderStatusChange,
   notifyDetailStatusChange,
   notifyPaymentRequest,
   checkNotificationHealth,
+  notifySuccessfulPayment
 };

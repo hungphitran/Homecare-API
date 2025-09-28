@@ -4,6 +4,9 @@ const Request = require('../model/request.model')
 const RequestDetail = require('../model/requestDetail.model')
 const mongoose = require('mongoose');
 const { v4: uuidv4 } = require('uuid');
+
+const {  notifySuccessfulPayment } = require('../utils/notifications');
+
 const payosController = {
     createPaymentLink: async (req, res) => {
         let request = await Request.findOne({ _id: new mongoose.Types.ObjectId( req.body.requestId )  })
@@ -44,15 +47,17 @@ const payosController = {
             if (!valid) return res.status(400).send('Invalid');
             console.log('Webhook received:', req.body);
             // Cập nhật trạng thái đơn hàng
-            const { description, status } = req.body;
-
-                let request = await Request.findOne({ _id: new mongoose.Types.ObjectId(description)  })
+            const requestId = new mongoose.Types.ObjectId(req.body.data.description);
+                console.log(`Request ID from description: ${requestId}`);
+                let request = await Request.findOne({ _id: requestId})
+                console.log(request);
                 if (request) {
                     request.status = 'completed';
                     await request.save();
+                    await notifySuccessfulPayment(request);
                 }
                 else{
-                    console.log(`Order ${orderCode} not found in DB`);
+                    console.log(`Order not found in DB`);
                 }
         } catch (err) {
         console.error(err);
@@ -60,6 +65,17 @@ const payosController = {
         }        
         // Xử lý sự kiện từ PayOS ở đây
         res.status(200).send('OK');
+    },
+    checkPaymentStatus: async (req, res) => { // check status with description
+  try {
+    const orderCode = req.body.orderCode; // Lấy orderCode từ yêu cầu
+    const result = await payOS.paymentRequests.get(orderCode);
+    console.log("Thông tin giao dịch:", result);
+    res.status(200).json(result);
+  } catch (err) {
+    console.error("Lỗi khi kiểm tra trạng thái:", err);
+    throw err;
+  }
     }
 };
 module.exports = payosController
