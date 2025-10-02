@@ -61,6 +61,7 @@ function convertUTCToVietnamTime(utcTime) {
         
         // Add 7 hours to convert UTC to Vietnam time
         const vietnamTime = new Date(date.getTime() + (7 * 60 * 60 * 1000));
+        console.log('Converted Vietnam time:', vietnamTime.toISOString(), 'from UTC time:', utcTime);
         return vietnamTime.toISOString();
     } catch (error) {
         console.error('Error converting UTC to Vietnam time:', error);
@@ -374,13 +375,6 @@ const requestController ={
                 });
             }
             
-            // Validate time range
-            if (!timeUtils.isValidTimeRange(standardizedStartTime, standardizedEndTime)) {
-                return res.status(400).json({
-                    success: false,
-                    message: "Invalid time range. End time must be after start time"
-                });
-            }
             
             // Handle orderDate - standardize and derive from startTime if not provided
             let orderDate = req.body.orderDate;
@@ -482,8 +476,9 @@ const requestController ={
 
         let scheduleIds = [];
         // let totalCost = req.body.totalCost; // Tổng chi phí dịch vụ
-        let totalCost = 0; // Tổng chi phí dịch vụ
-        let result_calculated = await calculateTotalCost(req.body.service.title, standardizedStartTime, standardizedEndTime, finalWorkingDates[0]);
+        let totalCost = req.body.totalCost // Tổng chi phí dịch vụ
+        console.log("Calculating total cost",req.body.service.title,req.body.startTime,req.body.endTime);
+        let result_calculated = await calculateTotalCost(req.body.service.title, req.body.startTime,req.body.startTime, finalWorkingDates[0]);
         if (result_calculated.totalOvertimeHours > 0) {
             req.body.service.coefficient_ot = result_calculated.HSovertime;
         }
