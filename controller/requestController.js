@@ -654,6 +654,41 @@ const requestController ={
             res.status(500).json(err);
         }
     },
+    getOneById: async (req,res,next)=>{
+        try {
+            const request = await Request.findById(req.params.id)
+            .select('-__v -createdBy -updatedBy -deletedBy -deleted -profit -createdAt -updatedAt');
+            if (!request) {
+                return res.status(404).json({
+                    success: false,
+                    message: "Request not found"
+                });
+            }
+            // Lấy schedules từ RequestDetail cho mỗi request
+            const schedules = await RequestDetail.find({
+                _id: { $in: request.scheduleIds }
+            }).select('-__v -createdAt -updatedAt');
+            // Populate helper information for schedules
+            const schedulesWithHelperInfo = await populateHelperInfo(schedules.map(schedule => schedule.toObject()));
+            // Convert UTC times to Vietnam time for response
+            const requestWithVietnamTime = {
+                ...request.toObject(),
+                orderDate: convertUTCToVietnamDate(request.orderDate),
+                startTime: convertUTCToVietnamTime(request.startTime),
+                endTime: convertUTCToVietnamTime(request.endTime),
+                schedules: schedulesWithHelperInfo.map(schedule => ({
+                    ...schedule,
+                    startTime: convertUTCToVietnamTime(schedule.startTime),
+                    endTime: convertUTCToVietnamTime(schedule.endTime),
+                    workingDate: convertUTCToVietnamDate(schedule.workingDate),
+                    comment: schedule.comment || null
+                }))
+            };
+            res.status(200).json(requestWithVietnamTime);
+        } catch (err) {
+            res.status(500).json(err);
+        }
+    },
     getMyAssignedRequests: async (req,res,next)=>{
         try {
             const helperId = req.user.id || req.user.phone || req.user.helper_id; // Get helper ID from JWT token

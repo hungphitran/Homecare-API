@@ -2,6 +2,11 @@ const requestController = require('../controller/requestController')
 const router = require('express').Router()
 const { authenticateToken, requireHelper, requireCustomer, requireOwnership } = require('../middleware/auth')
 
+
+// Get request details by ID (for both customer and helper, must come before other GET routes)
+router.get('/detail/:id', authenticateToken, requestController.getOneById);
+
+
 // Public - calculate cost (không cần xác thực để estimate)
 router.post('/calculateCost', requestController.calculateCost);
 
@@ -27,6 +32,8 @@ router.get('/my-assigned', authenticateToken, requireHelper, requestController.g
 
 // Customer can get their own requests (must come after other specific routes)
 router.get('/:phone', authenticateToken, requireOwnership, requestController.getByPhone);
+
+
 
 // Customer can create requests
 router.post('/', authenticateToken, requireCustomer, requestController.create);
