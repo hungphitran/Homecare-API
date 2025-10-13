@@ -13,6 +13,7 @@ const timeUtils = require('../utils/timeUtils');
 const { notifyOrderStatusChange, notifyDetailStatusChange, notifyPaymentRequest } = require('../utils/notifications');
 const { notifyHelperJobAssigned } = require('../utils/helperNotifications');
 const CostFactorType = require('../model/costFactorType.model');
+const { helpers } = require('handlebars');
 
 /**
  * Helper function to validate status transitions according to STATUS_FLOW.md
@@ -760,7 +761,37 @@ const requestController ={
             });
         }
     },
+    getAllHelperRequests: async (req,res,next)=>{
+        try {
+            const helper_id = req.params.helper_id;
+            const details = await RequestDetail.find({ helper_id: helper_id ,status: 'completed'})
+            .select('-__v -createdAt -updatedAt -helper_cost  -cost -helper_id -status')
+            .lean();
 
+            for (let i = 0; i < details.length; i++) {
+                let detail_id = details[i]._id.toString();
+                let request = await Request.findOne({scheduleIds: { $in: [detail_id] }})
+                .select('-__v -createdBy -updatedBy -deletedBy -deleted -profit -createdAt -updatedAt')
+                .lean();
+
+                if (request) {
+                    details[i].service = request.service.title;
+                } else {
+                    details[i].service = null;
+                }
+
+                // Convert UTC times to Vietnam time for response
+                details[i].startTime = convertUTCToVietnamTime(details[i].startTime);
+                details[i].endTime = convertUTCToVietnamTime(details[i].endTime);
+                details[i].workingDate = convertUTCToVietnamDate(details[i].workingDate);
+            }
+
+            res.status(200).json(details);
+        } catch (err) {
+            console.error('Error in getAllHelperRequests:', err);
+            res.status(500).json(err);
+        }
+    },
     getByPhone: async (req,res,next)=>{
         try {
             const requests = await Request.find({"customerInfo.phone":req.params.phone})

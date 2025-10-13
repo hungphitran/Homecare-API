@@ -23,6 +23,7 @@ router.get('/test-helpercost',requestController.testHelperCost);
 // Customer can cancel their own requests
 router.post('/cancel', authenticateToken, requireCustomer, requestController.cancelRequest)
 
+
 // Admin/Helper can get all available requests (chưa có helper)
 router.get('/', authenticateToken, requireHelper, requestController.getAll);
 
@@ -32,6 +33,7 @@ router.get('/my-assigned', authenticateToken, requireHelper, requestController.g
 
 // Customer can get their own requests (must come after other specific routes)
 router.get('/:phone', authenticateToken, requireOwnership, requestController.getByPhone);
+router.get('/helper/:helper_id', authenticateToken, requireCustomer, requestController.getAllHelperRequests);
 
 
 
