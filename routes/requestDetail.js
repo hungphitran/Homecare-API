@@ -5,6 +5,12 @@ const { authenticateToken, requireHelper, requireCustomer } = require('../middle
 // Customer can post review for their requests
 router.post('/review', authenticateToken, requireCustomer, requestDetailController.postReview)
 
+// Helper can send report via email (requires authentication)
+router.post('/send-report', authenticateToken, requestDetailController.sendReport)
+
+// Test email connection (admin only - for testing purposes)
+router.get('/test-email', authenticateToken, requestDetailController.testEmailConnection)
+
 // Helper can get their own request details
 // router.get('/helper/:id', authenticateToken, requireHelper, requestDetailController.getByHelperId);
 

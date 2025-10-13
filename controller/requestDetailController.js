@@ -2,9 +2,12 @@ const RequestDetail = require('../model/requestDetail.model')
 const Request = require('../model/request.model')
 const GeneralSetting = require('../model/generalSetting.model')
 const Helper = require('../model/helper.model')
+const Service = require('../model/service.model')
+const Customer = require('../model/customer.model')
 const moment = require("moment");
 const mongoose = require('mongoose')
 const { sendToCustomerPhone } = require('../utils/notifications');
+const emailService = require('../utils/emailService');
 
 
 const requestDetailController ={
@@ -154,6 +157,132 @@ const requestDetailController ={
         } catch (err) {
             console.error('Error updating review:', err);
             res.status(500).json({ error: 'Internal server error' });
+        }
+    },
+    sendReport: async (req,res,next)=>{
+        try {
+            console.log('[SEND REPORT] Starting report sending process...');
+            
+            // Validate required fields
+            if (!req.body.detailId) {
+                console.log('[SEND REPORT] Missing required fields');
+                return res.status(400).json({ 
+                    error: 'Missing required field',
+                    message: 'detailId là bắt buộc'
+                });
+            }
+            
+            // Validate ObjectId format
+            if (!mongoose.Types.ObjectId.isValid(req.body.detailId)) {
+                console.log('[SEND REPORT] Invalid ObjectId format');
+                return res.status(400).json({
+                    error: 'Invalid ObjectId format',
+                    message: 'detailId phải có định dạng ObjectId hợp lệ'
+                });
+            }
+
+            let reportType = req.body.type || ""
+            let description = req.body.description || ''
+
+            console.log(`[SEND REPORT] Looking for RequestDetail with ID: ${req.body.detailId}`);
+
+            // Find the RequestDetail with populated data
+            const requestDetail = await RequestDetail.findById({"_id": new mongoose.Types.ObjectId(req.body.detailId)})
+                
+            if (!requestDetail) {
+                console.log('[SEND REPORT] RequestDetail not found');
+                return res.status(404).json({
+                    error: 'RequestDetail not found',
+                    message: 'Không tìm thấy chi tiết đơn hàng'
+                });
+            }
+
+            console.log('[SEND REPORT] RequestDetail found, gathering additional data...');
+            // Get helper info
+            if (requestDetail.helper_id) {
+                if (requestDetail.helper_id) {
+                    helperInfo = requestDetail.helper_id;
+                } else {
+                    const helper = await Helper.findById(requestDetail.helper_id);
+                    helperInfo = helper;
+                }
+            }
+
+            // Prepare report data for email
+            const reportData = {
+                detailId: req.body.detailId,
+                type: reportType,
+                description: description,
+            };
+
+            console.log('[SEND REPORT] Report data prepared:', {
+                detailId: reportData.detailId,
+                type: reportData.type,
+                description: reportData.description
+            });
+
+            // Send email
+            console.log('[SEND REPORT] Attempting to send email...');
+            const emailResult = await emailService.sendReport(reportData);
+
+            if (emailResult.success) {
+                console.log('[SEND REPORT] ✅ Email sent successfully!');
+                res.status(200).json({ 
+                    message: "Report sent successfully",
+                    email: {
+                        sent: true,
+                        recipient: emailResult.recipient,
+                        messageId: emailResult.messageId
+                    }
+                });
+            } else {
+                console.error('[SEND REPORT] ❌ Email sending failed:', emailResult.error);
+                res.status(500).json({ 
+                    error: 'Email sending failed',
+                    message: emailResult.error,
+                    details: 'Báo cáo được tạo thành công nhưng không thể gửi email. Vui lòng kiểm tra cấu hình email.'
+                });
+            }
+        }
+        catch (err) {
+            console.error('[SEND REPORT] Unexpected error:', err);
+            res.status(500).json({ 
+                error: 'Internal server error',
+                message: err.message 
+            });
+        }
+    },
+
+    testEmailConnection: async (req, res, next) => {
+        try {
+            console.log('[TEST EMAIL] Testing email connection...');
+            
+            // Test email connection
+            const testResult = await emailService.testConnection();
+            
+            if (testResult.success) {
+                console.log('[TEST EMAIL] ✅ Email connection successful');
+                res.status(200).json({
+                    success: true,
+                    message: 'Email connection is working properly',
+                    details: testResult.message
+                });
+            } else {
+                console.log('[TEST EMAIL] ❌ Email connection failed:', testResult.message);
+                res.status(500).json({
+                    success: false,
+                    message: 'Email connection failed',
+                    error: testResult.message,
+                    suggestion: 'Please check your email environment variables configuration'
+                });
+            }
+        } catch (err) {
+            console.error('[TEST EMAIL] Unexpected error:', err);
+            res.status(500).json({
+                success: false,
+                message: 'Error testing email connection',
+                error: err.message
+            });
         }
     }
 }

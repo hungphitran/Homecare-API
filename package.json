@@ -32,7 +32,8 @@
     "firebase-admin": "^12.6.0",
     "jsonwebtoken": "^9.0.2",
     "moment": "^2.30.1",
-    "mongoose": "^8.5.4"
+    "mongoose": "^8.5.4",
+    "nodemailer": "^7.0.9"
   },
   "devDependencies": {
     "jest": "^29.7.0",
