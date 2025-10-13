@@ -13,7 +13,6 @@ const timeUtils = require('../utils/timeUtils');
 const { notifyOrderStatusChange, notifyDetailStatusChange, notifyPaymentRequest } = require('../utils/notifications');
 const { notifyHelperJobAssigned } = require('../utils/helperNotifications');
 const CostFactorType = require('../model/costFactorType.model');
-const { helpers } = require('handlebars');
 
 /**
  * Helper function to validate status transitions according to STATUS_FLOW.md
